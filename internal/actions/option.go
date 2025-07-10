@@ -65,7 +65,7 @@ func (action *GitOCI) handleOption(ctx context.Context, name cmd.Type, value str
 	return nil
 }
 
-// verbosity handles the 'option verbosity' command.
+// verbosity handles the `option verbosity` command.
 //
 // https://git-scm.com/docs/gitremote-helpers#Documentation/gitremote-helpers.txt-optionverbosityn
 func (action *GitOCI) verbosity(value string) error {
