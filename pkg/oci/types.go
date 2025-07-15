@@ -9,16 +9,16 @@ import (
 // Git OCI artifacts.
 const (
 	// ArtifactTypeGitManifest is the artifact type for an Git manifest.
-	ArtifactTypeGitManifest = "application/vnd.act3-ai.git.repo.v1+json"
+	ArtifactTypeGitManifest = "application/vnd.ai.act3.git.repo.v1+json"
 
 	// MediaTypeGitConfig is the media type for a Git config.
-	MediaTypeGitConfig = "application/vnd.act3-ai.git.config.v1+json"
+	MediaTypeGitConfig = "application/vnd.ai.act3.git.config.v1+json"
 
 	// MediaTypePackLayer is the media type for a Git packfile stored as an OCI layer.
-	MediaTypePackLayer = "application/vnd.act3-ai.git.pack.v1"
+	MediaTypePackLayer = "application/vnd.ai.act3.git.pack.v1"
 
 	// AnnotationGitRemoteOCIVersion is the key for the annotation to denote the git-remote-oci version used during the most recent operation.
-	AnnotationGitRemoteOCIVersion = "vnd.act3-ai.git-remote-oci.version"
+	AnnotationGitRemoteOCIVersion = "vnd.ai.act3.git-remote-oci.version"
 )
 
 // ConfigGit is an OCI manifest config, containing information about a Git repository's references.
@@ -42,13 +42,13 @@ type ReferenceInfo struct {
 // LFS OCI artifacts.
 // const (
 // 	// ArtifactTypeLFSManifest is the artifact type for an Git LFS manifest.
-// 	ArtifactTypeLFSManifest = "application/vnd.act3-ai.git-lfs.repo.v1+json"
+// 	ArtifactTypeLFSManifest = "application/vnd.ai.act3.git-lfs.repo.v1+json"
 
 // 	// MediaTypeLFSConfig is the media type for a Git LFS config.
-// 	MediaTypeLFSConfig = "application/vnd.act3-ai.git-lfs.config.v1+json"
+// 	MediaTypeLFSConfig = "application/vnd.ai.act3.git-lfs.config.v1+json"
 
 // 	// MediaTypeLFSLayer is the media type used for Git LFS layers.
-// 	MediaTypeLFSLayer = "application/vnd.act3-ai.git-lfs.object.v1"
+// 	MediaTypeLFSLayer = "application/vnd.ai.act3.git-lfs.object.v1"
 // )
 
 // ConfigLFS is an OCI manifest config, containing information about which commits an LFS file is associated with.
