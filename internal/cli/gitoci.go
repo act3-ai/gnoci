@@ -19,7 +19,11 @@ func NewCLI(version string) *cobra.Command {
 		Args:         cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// https://git-scm.com/docs/gitremote-helpers#_invocation
-			name, address := args[0], args[1]
+			name := args[0]
+			address := name
+			if len(args) > 1 {
+				address = args[1]
+			}
 
 			gitDir, ok := os.LookupEnv("GIT_DIR")
 			if !ok {

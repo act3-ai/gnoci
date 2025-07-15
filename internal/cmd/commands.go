@@ -23,9 +23,9 @@ type Type string
 const (
 	// Git conventions
 	Capabilities Type = "capabilities"
-	// Push                 = "push"
+	List         Type = "list"
+	Push         Type = "push"
 	// Fetch                = "fetch"
-	// List                 = "list"
 	// ListForPush       = "for-push"
 
 	// not a Git convention, marks end of input
@@ -35,6 +35,8 @@ const (
 var Commands = []Type{
 	Capabilities,
 	Empty,
+	List,
+	Push,
 }
 
 // https://git-scm.com/docs/gitremote-helpers#_options
@@ -70,8 +72,6 @@ func SupportedCommand(name Type) bool {
 // parse parses a single line received from Git, turning it into a cmd.Git
 // easily identified by Type.
 func parse(ctx context.Context, line string) (Git, error) {
-	slog.DebugContext(ctx, "parsing command from Git", "line", line)
-
 	fields := strings.Fields(line)
 	if len(fields) < 1 {
 		return Git{
@@ -94,6 +94,11 @@ func parse(ctx context.Context, line string) (Git, error) {
 			Cmd:    Option,
 			SubCmd: Type(fields[1]),
 			Data:   fields[2:],
+		}, nil
+	case List:
+		// TODO: check for 'for-push' subcommand
+		return Git{
+			Cmd: List,
 		}, nil
 	default:
 		return Git{}, fmt.Errorf("%w: %s", ErrUnsupportedCommand, cmd)
