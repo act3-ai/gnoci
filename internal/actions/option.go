@@ -15,7 +15,6 @@ type Option struct {
 
 // option handles and responds to the option subcommands.
 func (action *GitOCI) option(ctx context.Context, c cmd.Git) error {
-	slog.DebugContext(ctx, "handling option", "command", c.Cmd, "subcommand", c.SubCmd, "data", fmt.Sprintf("%v", c.Data))
 	const (
 		ok          = "ok"
 		unsupported = "unsupported"

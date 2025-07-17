@@ -55,21 +55,24 @@ func (action *GitOCI) list(ctx context.Context) error {
 		return fmt.Errorf("opening local repository: %w", err)
 	}
 
+	// not necessarily an error, this could be a clone
 	headRef, err := localRepo.Head()
 	if err != nil {
-		return fmt.Errorf("resolving current HEAD: %w", err)
+		slog.InfoContext(ctx, "local HEAD not found")
+	} else {
+		slog.InfoContext(ctx, "head ref", "target", headRef.Target().String(), "name", headRef.Name().String())
 	}
-	slog.InfoContext(ctx, "head ref", "target", headRef.Target().String(), "name", headRef.Name().String())
 
 	// TODO: what about refs/remotes/<shortname>/<ref>
 	for k, v := range config.Heads {
-		if k == strings.TrimPrefix(headRef.Name().String(), "refs/heads/") {
+		// list HEAD if one exists locally
+		if headRef != nil && (k == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
 			s := fmt.Sprintf("@%s HEAD", headRef.Name())
 			if err := action.batcher.Write(ctx, s); err != nil {
 				return fmt.Errorf("writing ref to Git: %w", err)
 			}
 		}
-		// TODO: head is likely the current branch HEAD, not necessarily main
+
 		s := fmt.Sprintf("%s refs/heads/%s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
