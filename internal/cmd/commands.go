@@ -24,9 +24,9 @@ const (
 	// Git conventions
 	Capabilities Type = "capabilities"
 	List         Type = "list"
-	Push         Type = "push"
+	ListForPush  Type = "for-push"
+	// Push         Type = "push"
 	// Fetch                = "fetch"
-	// ListForPush       = "for-push"
 
 	// not a Git convention, marks end of input
 	Empty Type = "empty"
@@ -36,7 +36,6 @@ var Commands = []Type{
 	Capabilities,
 	Empty,
 	List,
-	Push,
 }
 
 // https://git-scm.com/docs/gitremote-helpers#_options
@@ -96,10 +95,13 @@ func parse(ctx context.Context, line string) (Git, error) {
 			Data:   fields[2:],
 		}, nil
 	case List:
-		// TODO: check for 'for-push' subcommand
-		return Git{
+		res := Git{
 			Cmd: List,
-		}, nil
+		}
+		if len(fields) > 1 {
+			res.SubCmd = Type(fields[1])
+		}
+		return res, nil
 	default:
 		return Git{}, fmt.Errorf("%w: %s", ErrUnsupportedCommand, cmd)
 	}

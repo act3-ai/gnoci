@@ -73,7 +73,7 @@ func (action *GitOCI) Run(ctx context.Context) error {
 				return fmt.Errorf("running option command: %w", err)
 			}
 		case cmd.List:
-			if err := action.list(ctx); err != nil {
+			if err := action.list(ctx, (c.SubCmd == cmd.ListForPush)); err != nil {
 				return fmt.Errorf("running list command: %w", err)
 			}
 		default:

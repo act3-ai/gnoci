@@ -16,15 +16,18 @@ import (
 )
 
 // list handles the `list` command. Lists refs, one per line.
-func (action *GitOCI) list(ctx context.Context) error {
+func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 	config, err := action.fetchConfig(ctx)
 	if err != nil {
 		return err
 	}
 
-	headRef, err := action.resolveLocalHead(ctx)
-	if err != nil {
-		return err
+	var headRef *plumbing.Reference
+	if !forPush {
+		headRef, err = action.resolveLocalHead(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := action.listRefs(ctx, config, headRef); err != nil {
