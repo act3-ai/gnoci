@@ -15,7 +15,6 @@ type Option struct {
 
 // option handles and responds to the option subcommands.
 func (action *GitOCI) option(ctx context.Context, c cmd.Git) error {
-	slog.DebugContext(ctx, "handling option", "command", c.Cmd, "subcommand", c.SubCmd, "data", fmt.Sprintf("%v", c.Data))
 	const (
 		ok          = "ok"
 		unsupported = "unsupported"
@@ -38,7 +37,7 @@ func (action *GitOCI) option(ctx context.Context, c cmd.Git) error {
 		result = ok
 	}
 
-	if err := action.batcher.Write(result); err != nil {
+	if err := action.batcher.Write(ctx, result); err != nil {
 		return fmt.Errorf("writing option response %s: %w", c.SubCmd, err)
 	}
 	// Git will print a warning to stderr if a newline is written
@@ -65,7 +64,7 @@ func (action *GitOCI) handleOption(ctx context.Context, name cmd.Type, value str
 	return nil
 }
 
-// verbosity handles the 'option verbosity' command.
+// verbosity handles the `option verbosity` command.
 //
 // https://git-scm.com/docs/gitremote-helpers#Documentation/gitremote-helpers.txt-optionverbosityn
 func (action *GitOCI) verbosity(value string) error {

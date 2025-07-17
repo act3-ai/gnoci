@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/act3-ai/gitoci/internal/cmd"
 )
@@ -31,7 +32,7 @@ func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version 
 		batcher: cmd.NewBatcher(in, out),
 		gitDir:  gitDir,
 		name:    shortname,
-		addess:  address,
+		addess:  strings.TrimPrefix(address, "oci://"),
 		version: version,
 	}
 }
@@ -60,16 +61,23 @@ func (action *GitOCI) Run(ctx context.Context) error {
 
 		switch c.Cmd {
 		case cmd.Empty:
-			done = true
+			// done = true
+			continue
 		case cmd.Capabilities:
 			// Git shouldn't need to do this again, but let's be safe
 			if err := action.capabilities(ctx); err != nil {
-				return err
+				return fmt.Errorf("running capabilities command: %w", err)
 			}
 		case cmd.Option:
 			if err := action.option(ctx, c); err != nil {
-				return err
+				return fmt.Errorf("running option command: %w", err)
 			}
+		case cmd.List:
+			if err := action.list(ctx, (c.SubCmd == cmd.ListForPush)); err != nil {
+				return fmt.Errorf("running list command: %w", err)
+			}
+		default:
+			return fmt.Errorf("default case hit")
 		}
 	}
 

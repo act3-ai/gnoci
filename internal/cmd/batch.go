@@ -29,7 +29,7 @@ type BatchWriter interface {
 
 	// WriteBatch writes a batch of messages to Git, which
 	// MAY need to be followed up with a flush.
-	WriteBatch(...string) error
+	WriteBatch(ctx context.Context, lines ...string) error
 }
 
 // type ReadWriter interface {
@@ -47,10 +47,10 @@ type Reader interface {
 type Writer interface {
 	// Write buffers a single line write to Git. One or more
 	// calls MAY need to be followed up with a flush.
-	Write(string) error
+	Write(ctx context.Context, line string) error
 
 	// Flush writes buffered Write(s) to Git, optionally followed up with a blank line.
-	Flush(bool) error
+	Flush(newline bool) error
 }
 
 // batcher implements BatchReadWriter.
@@ -108,10 +108,10 @@ func (b *batcher) ReadBatch(ctx context.Context) ([]Git, error) {
 }
 
 // WriteBatch writes Message(s) to Git, completing the batch with a blank line, and flushing the buffered writes to Git.
-func (b *batcher) WriteBatch(lines ...string) error {
+func (b *batcher) WriteBatch(ctx context.Context, lines ...string) error {
 	for _, line := range lines {
-		if _, err := fmt.Fprintln(b.out, line); err != nil {
-			return fmt.Errorf("writing to Git, line: %s: %w", line, err)
+		if err := b.Write(ctx, line); err != nil {
+			return err
 		}
 	}
 
@@ -119,7 +119,8 @@ func (b *batcher) WriteBatch(lines ...string) error {
 }
 
 // Write buffers a single line write to Git, must be followed up with a flush.
-func (b *batcher) Write(line string) error {
+func (b *batcher) Write(ctx context.Context, line string) error {
+	slog.DebugContext(ctx, "writing line to git", "line", line)
 	if _, err := fmt.Fprintln(b.out, line); err != nil {
 		return fmt.Errorf("writing to Git, line: %s: %w", line, err)
 	}

@@ -5,6 +5,7 @@
 /profile.cov
 /integration
 /*.private
+/testdata/
 
 ## Ignore logfiles
 /log
