@@ -64,7 +64,7 @@ func (action *GitOCI) list(ctx context.Context) error {
 	// TODO: what about refs/remotes/<shortname>/<ref>
 	for k, v := range config.Heads {
 		if k == strings.TrimPrefix(headRef.Name().String(), "refs/heads/") {
-			s := fmt.Sprintf("@%s", headRef.Name())
+			s := fmt.Sprintf("@%s HEAD", headRef.Name())
 			if err := action.batcher.Write(ctx, s); err != nil {
 				return fmt.Errorf("writing ref to Git: %w", err)
 			}
@@ -74,11 +74,6 @@ func (action *GitOCI) list(ctx context.Context) error {
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
 		}
-		// if k == "main" {
-		// 	if err := action.batcher.Write(ctx, "@refs/heads/main HEAD"); err != nil {
-		// 		return fmt.Errorf("writing ref to Git: %w", err)
-		// 	}
-		// }
 	}
 
 	for k, v := range config.Tags {
