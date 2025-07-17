@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/act3-ai/gitoci/internal/ociutil"
 	"github.com/act3-ai/gitoci/pkg/oci"
+	"github.com/go-git/go-git/v5"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2/content"
 )
@@ -48,20 +50,39 @@ func (action *GitOCI) list(ctx context.Context) error {
 		return fmt.Errorf("decoding config: %w", err)
 	}
 
-	slog.DebugContext(ctx, "config", "string", string(cfgRaw))
-	slog.DebugContext(ctx, "listing heads", "length", len(config.Heads))
+	localRepo, err := git.PlainOpen(action.gitDir)
+	if err != nil {
+		return fmt.Errorf("opening local repository: %w", err)
+	}
+
+	headRef, err := localRepo.Head()
+	if err != nil {
+		return fmt.Errorf("resolving current HEAD: %w", err)
+	}
+	slog.InfoContext(ctx, "head ref", "target", headRef.Target().String(), "name", headRef.Name().String())
+
+	// TODO: what about refs/remotes/<shortname>/<ref>
 	for k, v := range config.Heads {
-		if k == "main" {
-			k = "refs/HEAD"
+		if k == strings.TrimPrefix(headRef.Name().String(), "refs/heads/") {
+			s := fmt.Sprintf("@%s", headRef.Name())
+			if err := action.batcher.Write(ctx, s); err != nil {
+				return fmt.Errorf("writing ref to Git: %w", err)
+			}
 		}
-		s := fmt.Sprintf("%s %s", v.Commit, k)
+		// TODO: head is likely the current branch HEAD, not necessarily main
+		s := fmt.Sprintf("%s refs/heads/%s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
 		}
+		// if k == "main" {
+		// 	if err := action.batcher.Write(ctx, "@refs/heads/main HEAD"); err != nil {
+		// 		return fmt.Errorf("writing ref to Git: %w", err)
+		// 	}
+		// }
 	}
-	slog.DebugContext(ctx, "listing tags", "length", len(config.Tags))
+
 	for k, v := range config.Tags {
-		s := fmt.Sprintf("%s %s", v.Commit, k)
+		s := fmt.Sprintf("%s refs/tags/%s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
 		}
