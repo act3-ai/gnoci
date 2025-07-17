@@ -54,14 +54,14 @@ func (action *GitOCI) list(ctx context.Context) error {
 		if k == "main" {
 			k = "refs/HEAD"
 		}
-		s := fmt.Sprintf("%s %s", v.Commit, k.String())
+		s := fmt.Sprintf("%s %s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
 		}
 	}
 	slog.DebugContext(ctx, "listing tags", "length", len(config.Tags))
 	for k, v := range config.Tags {
-		s := fmt.Sprintf("%s %s", v.Commit, k.String())
+		s := fmt.Sprintf("%s %s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
 		}
