@@ -76,6 +76,17 @@ func (action *GitOCI) Run(ctx context.Context) error {
 			if err := action.list(ctx, (c.SubCmd == cmd.ListForPush)); err != nil {
 				return fmt.Errorf("running list command: %w", err)
 			}
+		case cmd.Push:
+			// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
+			batch, err := action.batcher.ReadBatch(ctx)
+			if err != nil {
+				return fmt.Errorf("reading push batch: %w", err)
+			}
+			fullBatch := append([]cmd.Git{c}, batch...)
+
+			if err := action.push(ctx, fullBatch); err != nil {
+				return fmt.Errorf("running push command: %w", err)
+			}
 		default:
 			return fmt.Errorf("default case hit")
 		}

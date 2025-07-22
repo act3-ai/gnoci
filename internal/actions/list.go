@@ -126,12 +126,6 @@ func (action *GitOCI) listRefs(ctx context.Context, config oci.ConfigGit, headRe
 	return nil
 }
 
-// listForPush handles the `list for-push` command.
-// Similar to list, except only used to prepare for a push.
-// func (action *GitOCI) listForPush() error {
-
-// }
-
 // TODO: This func lists local refs, which we likley don't even need as git should do this for us,
 // but we'll keep this code block around as a comment for now incase we need it.
 // func (action *GitOCI) list() error {

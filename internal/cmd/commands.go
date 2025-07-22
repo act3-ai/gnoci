@@ -25,17 +25,19 @@ const (
 	Capabilities Type = "capabilities"
 	List         Type = "list"
 	ListForPush  Type = "for-push"
-	// Push         Type = "push"
+	Push         Type = "push"
 	// Fetch                = "fetch"
 
 	// not a Git convention, marks end of input
 	Empty Type = "empty"
 )
 
+// Commands defines all implemented git-remote-helper commands.
 var Commands = []Type{
 	Capabilities,
 	Empty,
 	List,
+	Push,
 }
 
 // https://git-scm.com/docs/gitremote-helpers#_options
@@ -44,13 +46,14 @@ const (
 	OptionVerbosity Type = "verbosity"
 )
 
+// Options defines all supported option subcommands.
 var Options = []Type{
 	Option,
 	OptionVerbosity,
 }
 
 // Git represents a parsed command received from Git. It may include a
-// subcommand
+// subcommand.
 type Git struct {
 	Cmd    Type
 	SubCmd Type // not all commands include a subcommand
@@ -102,6 +105,14 @@ func parse(ctx context.Context, line string) (Git, error) {
 			res.SubCmd = Type(fields[1])
 		}
 		return res, nil
+	case Push:
+		if len(fields) < 2 {
+			return Git{}, fmt.Errorf("insufficient args for push command")
+		}
+		return Git{
+			Cmd:  Push,
+			Data: fields[1:],
+		}, nil
 	default:
 		return Git{}, fmt.Errorf("%w: %s", ErrUnsupportedCommand, cmd)
 	}
