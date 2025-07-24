@@ -17,7 +17,7 @@ import (
 
 // list handles the `list` command. Lists refs, one per line.
 func (action *GitOCI) list(ctx context.Context, forPush bool) error {
-	config, err := action.fetchConfig(ctx)
+	_, config, err := action.fetchMetadata(ctx)
 	if err != nil {
 		return err
 	}
@@ -37,42 +37,40 @@ func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 	return nil
 }
 
-// fetchConfig decodes an OCI Git config from a remote.
-func (action *GitOCI) fetchConfig(ctx context.Context) (oci.ConfigGit, error) {
+// fetchMetadata fetches an OCI Git manifests config from a remote.
+func (action *GitOCI) fetchMetadata(ctx context.Context) (man ocispec.Manifest, cfg oci.ConfigGit, err error) {
 	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
 	if err != nil {
-		return oci.ConfigGit{}, err
+		return man, cfg, err
 	}
 
 	slog.DebugContext(ctx, "resolving manifest descriptor")
 	manDesc, err := gt.Resolve(ctx, action.addess)
 	if err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("resolving manifest descriptor: %w", err)
+		return man, cfg, fmt.Errorf("resolving manifest descriptor: %w", err)
 	}
 
 	slog.DebugContext(ctx, "fetching manifest")
 	manRaw, err := content.FetchAll(ctx, gt, manDesc)
 	if err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("fetching manifest: %w", err)
+		return man, cfg, fmt.Errorf("fetching manifest: %w", err)
 	}
 
-	var manifest ocispec.Manifest
-	if err := json.Unmarshal(manRaw, &manifest); err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("decoding manifest: %w", err)
+	if err := json.Unmarshal(manRaw, &man); err != nil {
+		return man, cfg, fmt.Errorf("decoding manifest: %w", err)
 	}
 
 	slog.DebugContext(ctx, "fetching config")
-	cfgRaw, err := content.FetchAll(ctx, gt, manifest.Config)
+	cfgRaw, err := content.FetchAll(ctx, gt, man.Config)
 	if err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("fetching config: %w", err)
+		return man, cfg, fmt.Errorf("fetching config: %w", err)
 	}
 
-	var config oci.ConfigGit
-	if err := json.Unmarshal(cfgRaw, &config); err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("decoding config: %w", err)
+	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
+		return man, cfg, fmt.Errorf("decoding config: %w", err)
 	}
 
-	return config, nil
+	return man, cfg, nil
 }
 
 // resolveLocalHead returns the local HEAD, if one exists.
