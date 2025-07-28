@@ -8,49 +8,78 @@ import (
 	"path"
 	"strings"
 
-	"oras.land/oras-go/v2/errdef"
-
 	"github.com/act3-ai/gitoci/internal/cmd"
-	"github.com/act3-ai/gitoci/pkg/oci"
+	"github.com/act3-ai/gitoci/internal/ociutil/model"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
-	"github.com/go-git/go-git/v5/storage/filesystem/dotgit"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/opencontainers/go-digest"
 )
 
 // TODO: passing around *git.Repository and oci.ConfigGit may beg for an interface
 
-var ErrRemoteRefNotFound = errors.New("remote reference not found")
-
 type status uint8
 
 const (
-	// delete indicates a ref should be removed from the remote
-	delete status = 1 << iota
-	// ref indicates a ref should be updated in the remote
-	ref
-	// forward indicates the ref's commit object should be added to the remote
-	forward
-	// force indicates a force update should be performed
-	force
+	// statusDelete indicates a ref should be removed from the remote
+	statusDelete status = 1 << iota
+	// statusUpdateRef indicates a statusUpdateRef should be updated in the remote
+	statusUpdateRef
+	// statusAddCommit indicates the ref's commit object should be added to the remote
+	statusAddCommit
+	// statusForce indicates a statusForce update should be performed
+	statusForce
 	// rewritten indicates history has been rewritten
 	// TODO: necessary?
 	// rewritten
 )
 
 // TODO: compareRefs is intended for resolving the min set of hashes needed for a thin packfile.
-func compareRefs(localRepo *dotgit.DotGit, localRef, remoteRef *plumbing.Reference) (status, error) {
+func (action *GitOCI) compareRefs(localRepo *git.Repository, localRef, remoteRef *plumbing.Reference) (status, digest.Digest, error) {
+	// TODO: this implementation attempts to resolve as much information about a ref comparison
+	// as possible, but this is likely overkill. It may be better to short-circuit, e.g. if force
+	// we don't care to resolve ancestral status of the remote & local refs.
 	var s status
 
 	// if local is empty, status += delete
 	if localRef == nil {
-		s = s | delete
+		s = s | statusDelete
 	}
 
-	// TODO
-	return 0, fmt.Errorf("not implemented")
+	// TODO: uncomment when force is supported
+	// if action.Force {
+	// 	s = s | statusForce
+	// }
+
+	remoteCommit, err := localRepo.CommitObject(remoteRef.Hash())
+	if err != nil {
+		return s, "", fmt.Errorf("resolving commit object from hash for remote ref: %w", err)
+	}
+
+	localCommit, err := localRepo.CommitObject(localRef.Hash())
+	if err != nil {
+		return s, "", fmt.Errorf("resolving commit object from hash for local ref: %w", err)
+	}
+
+	// TODO: something smells off here...
+	isAncestor, err := remoteCommit.IsAncestor(localCommit)
+	if err != nil {
+		return s, "", fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
+	}
+	if isAncestor {
+		s = s | statusUpdateRef
+	}
+
+	layer, err := action.remote.CommitExists(localRepo, localCommit)
+	if err != nil {
+		return s, "", fmt.Errorf("resolving existance of commit %s in remote: %w", localCommit, err)
+	}
+	if layer == "" {
+		s = s | statusAddCommit
+	}
+
+	return s, layer, nil
 }
 
 // func sample(localRepo *git.Repository) error {
@@ -64,17 +93,8 @@ func compareRefs(localRepo *dotgit.DotGit, localRef, remoteRef *plumbing.Referen
 
 // push handles the `push` command.
 func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
-	// fetch config
-	man, cfg, err := action.fetchMetadata(ctx)
-	switch {
-	case errors.Is(err, errdef.ErrNotFound):
-		slog.InfoContext(ctx, "remote does not exist, starting fresh")
-		cfg = oci.ConfigGit{
-			Heads: make(map[string]oci.ReferenceInfo, 0),
-			Tags:  make(map[string]oci.ReferenceInfo, 0),
-		}
-	case err != nil:
-		return fmt.Errorf("fetching remote metadata: %w", err)
+	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+		return fmt.Errorf("fetching remote metadta: %w", err)
 	}
 
 	repo, err := git.PlainOpen(action.gitDir)
@@ -82,28 +102,60 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 		return fmt.Errorf("opening local repository: %w", err)
 	}
 	// use pkg dotgit rather than git so we have access to manage packfiles
-	// repo := dotgit.New(osfs.New(action.gitDir))
+	// repo2 := dotgit.New(osfs.New(action.gitDir))
 
 	// HACK: For now we're creating an packfile of the entire repo,
 	// but we'll keep this around for testing
 	// resolve state of refs in remote
+	newCommits := make([]plumbing.Hash, 0)
 	for _, c := range cmds {
 		l, r, err := parseRefPair(c)
 		if err != nil {
 			return fmt.Errorf("parsing push command: %w", err)
 		}
 
-		local, err := resolveLocal(ctx, repo, l)
+		localRef, err := resolveLocal(ctx, repo, l)
 		if err != nil {
 			return err
 		}
-		slog.InfoContext(ctx, "resolved local reference", "ref", l.String(), "hash", local.Hash().String())
+		slog.InfoContext(ctx, "resolved local reference", "ref", l.String(), "hash", localRef.Hash().String())
 
-		remote, err := resolveRemote(ctx, cfg, r)
-		if err != nil {
+		remoteRef, err := action.remote.ResolveRef(ctx, r)
+		switch {
+		case err != nil:
 			return err
+		case remoteRef == nil:
+		default:
+			slog.InfoContext(ctx, "resolved remote reference", "ref", l.String(), "hash", remoteRef.Hash().String())
 		}
-		slog.InfoContext(ctx, "resolved remote reference", "ref", l.String(), "hash", remote.Hash().String())
+
+		refStatus, layer, err := action.compareRefs(repo, localRef, remoteRef)
+		if err != nil {
+			return fmt.Errorf("comparing local ref %sand remote ref %s: %w", localRef.Name().String(), remoteRef.Name().String(), err)
+		}
+
+		switch {
+		case (refStatus & statusDelete) == statusDelete:
+			action.remote.DeleteRef(ctx, remoteRef.Name())
+		case (refStatus & statusForce) == statusForce:
+			fallthrough
+		case (refStatus & statusAddCommit) == statusAddCommit:
+			// sanity
+			// TODO: ideally, this isn't necessary if we test properly
+			if layer == "" {
+				return fmt.Errorf("expected OCI layer with ref status add commit")
+			}
+			newCommits = append(newCommits, localRef.Hash())
+			fallthrough
+		case (refStatus & statusUpdateRef) == statusUpdateRef:
+			action.remote.UpdateRef(ctx, *plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()), layer)
+		default:
+			// where did we go wrong?
+			// return fmt.Errorf("insufficient handling of reference comparison for local ref %s and remote ref %s", localRef.Name().String(), remoteRef.Name().String())
+			// TODO: add a "skip" status when refs are skipped due to lack of support for its type?
+			// without it, the above error hits those cases where we log the skip elsewhere
+		}
+
 	}
 
 	// TODO: resolve common ancestors for thin pack
@@ -120,17 +172,13 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	packPath := path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.pack", packHash.String()))
 	// idxPath := path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.idx", packHash.String()))
 
-	buildOCI(packPath, man, cfg)
+	buildOCI(ctx, action.remote, packPath)
 
 	return fmt.Errorf("not implemented")
 }
 
-func buildOCI(packPath string, man ocispec.Manifest, cfg oci.ConfigGit) {
-	// if no mediatype, we know it's new
-	if man.MediaType == "" {
-		man.MediaType = ocispec.MediaTypeImageManifest
-		man.ArtifactType = oci.ArtifactTypeGitManifest
-	}
+func buildOCI(ctx context.Context, remote model.Modeler, packPath string) {
+	remote.AddPack(ctx, packPath)
 }
 
 // resolveLocal resolves the hash of a local reference.
@@ -140,25 +188,6 @@ func resolveLocal(_ context.Context, repo *git.Repository, ref plumbing.Referenc
 		return nil, fmt.Errorf("resolving hash of local reference %s: %w", ref.String(), err)
 	}
 	return localRef, nil
-}
-
-// resolveRemote resolves the hash of a remote reference, if one exists.
-func resolveRemote(ctx context.Context, cfg oci.ConfigGit, ref plumbing.ReferenceName) (*plumbing.Reference, error) {
-	var ok bool
-	var rInfo oci.ReferenceInfo
-	switch {
-	case ref.IsBranch():
-		rInfo, ok = cfg.Heads[ref.String()]
-	case ref.IsTag():
-		rInfo, ok = cfg.Tags[ref.String()]
-	default:
-		slog.WarnContext(ctx, "skipping unknown remote reference type", "reference", ref.String())
-	}
-
-	if ok {
-		return plumbing.NewHashReference(ref, plumbing.NewHash(rInfo.Commit)), nil
-	}
-	return nil, fmt.Errorf("%w: %s", ErrRemoteRefNotFound, ref.String())
 }
 
 // HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.

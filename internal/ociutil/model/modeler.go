@@ -4,6 +4,7 @@ package model
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,12 +12,15 @@ import (
 
 	"github.com/act3-ai/gitoci/internal/ociutil"
 	"github.com/act3-ai/gitoci/pkg/oci"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/errdef"
 )
 
 // Modeler allows for fetching, updating, and pushing a Git OCI data model to
@@ -27,6 +31,9 @@ type Modeler interface {
 	Cleanup() error
 	// Fetch pulls Git OCI metadata from a remote. It does not pull layers.
 	Fetch(ctx context.Context, ref string) error
+	// FetchOrDefault extends Fetch to initialize an empty OCI manifest and config
+	// if the remote ref does not exist.
+	FetchOrDefault(ctx context.Context, ref string) error
 	// Push uploads the Git OCI data model in its current state.
 	Push(ctx context.Context, ref string) (ocispec.Descriptor, error)
 	// AddPack adds a packfile as a layer to the Git OCI data model. refs are the
@@ -36,6 +43,13 @@ type Modeler interface {
 	// Git OCI data model. Useful for updating a reference where its object
 	// is within an existing packfile.
 	UpdateRef(ctx context.Context, gitRef plumbing.Reference, ociLayer digest.Digest)
+	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
+	// the ref does not exist or if not supported (head or tag ref).
+	ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error)
+	// DeleteRef removes a reference from the remote. The commit remains.
+	DeleteRef(ctx context.Context, ref plumbing.ReferenceName)
+	// CommitExists uses a local repository to resolve the best known OCI layer containing the
+	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
 
 	// TODO: LFS Support
 	// AddLFSFile(path string) (ocispec.Descriptor, error)
@@ -121,6 +135,28 @@ func (m *model) Fetch(ctx context.Context, ref string) error {
 	return nil
 }
 
+func (m *model) FetchOrDefault(ctx context.Context, ref string) error {
+	err := m.Fetch(ctx, ref)
+	switch {
+	case errors.Is(err, errdef.ErrNotFound):
+		slog.InfoContext(ctx, "remote does not exist, initializing default manifest and config")
+		m.cfg = oci.ConfigGit{
+			Heads: make(map[string]oci.ReferenceInfo, 0),
+			Tags:  make(map[string]oci.ReferenceInfo, 0),
+		}
+		m.man = ocispec.Manifest{
+			MediaType:    ocispec.MediaTypeImageManifest,
+			ArtifactType: oci.ArtifactTypeGitManifest,
+			// annotations set on push
+		}
+		return nil
+	case err != nil:
+		return fmt.Errorf("fetching remote metadata: %w", err)
+	default:
+		return nil
+	}
+}
+
 func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error) {
 	// TODO: Perhaps we could make this more efficient, ONLY in the case where
 	// multiple packfiles are added, if we make a custom oras.CopyGraphOptions to
@@ -161,7 +197,7 @@ func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error
 }
 
 func (m *model) AddPack(ctx context.Context, path string, refs ...plumbing.Reference) (ocispec.Descriptor, error) {
-	slog.DebugContext(ctx, "adding packfile to Git OCI manifest", "path")
+	slog.DebugContext(ctx, "adding packfile to Git OCI manifest", "path", path)
 	// filepath.Base adds an annotation for the filename, without exposing a user's filesystem
 	desc, err := m.fstore.Add(ctx, filepath.Base(path), oci.MediaTypePackLayer, path)
 	if err != nil {
@@ -185,4 +221,77 @@ func (m *model) UpdateRef(ctx context.Context, ref plumbing.Reference, ociLayer 
 	default:
 		slog.WarnContext(ctx, "skipping unknown remote reference type", "reference", ref.String())
 	}
+}
+
+func (m *model) ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error) {
+	var ok bool
+	var rInfo oci.ReferenceInfo
+	switch {
+	case ref.IsBranch():
+		rInfo, ok = m.cfg.Heads[ref.String()]
+	case ref.IsTag():
+		rInfo, ok = m.cfg.Tags[ref.String()]
+	default:
+		slog.WarnContext(ctx, "skipping resolution unknown remote reference type", "reference", ref.String())
+		return nil, nil
+	}
+
+	if ok {
+		return plumbing.NewHashReference(ref, plumbing.NewHash(rInfo.Commit)), nil
+	}
+	return nil, nil
+}
+
+func (m *model) DeleteRef(ctx context.Context, ref plumbing.ReferenceName) {
+	slog.InfoContext(ctx, "deleting reference from remote", "ref", ref.String())
+
+	switch {
+	case ref.IsBranch():
+		delete(m.cfg.Heads, ref.String())
+	case ref.IsTag():
+		delete(m.cfg.Tags, ref.String())
+	default:
+		slog.WarnContext(ctx, "skipping deletion unknown remote reference type", "reference", ref.String())
+		return
+	}
+}
+
+func (m *model) CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error) {
+	// TODO: rebuilding this map each time is inefficient
+	resolver := m.sortRefsByLayer()
+
+	// most efficient with a relatively new base layer containing few refs
+	// TODO: room for optimization?
+	for _, layer := range m.man.Layers {
+		for _, c := range resolver[layer.Digest] {
+			existingCommit, err := localRepo.CommitObject(c)
+			if err != nil {
+				return "", fmt.Errorf("resolving commit object for remote head commit %s: %w", c.String(), err)
+			}
+
+			isAncestor, err := commit.IsAncestor(existingCommit)
+			if err != nil {
+				return "", fmt.Errorf("resolving ancestral status of commit to remote head commit %s: %w", c.String(), err)
+			}
+			if isAncestor {
+				return layer.Digest, nil
+			}
+		}
+	}
+
+	return "", nil
+}
+
+// sortRefsByLayer organizes the refs in the current config by layer,
+// returning a map of layer digests to a slice of commit hashes contained in that layer.
+func (m *model) sortRefsByLayer() map[digest.Digest][]plumbing.Hash {
+	layerResolver := make(map[digest.Digest][]plumbing.Hash) // layer digest : []commits
+	for _, info := range m.cfg.Heads {
+		layerResolver[info.Layer] = append(layerResolver[info.Layer], plumbing.NewHash(info.Commit))
+	}
+	for _, info := range m.cfg.Tags {
+		layerResolver[info.Layer] = append(layerResolver[info.Layer], plumbing.NewHash(info.Commit))
+	}
+
+	return layerResolver
 }

@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/act3-ai/gitoci/internal/cmd"
+	"github.com/act3-ai/gitoci/internal/ociutil"
+	"github.com/act3-ai/gitoci/internal/ociutil/model"
 )
 
 // GitOCI represents the base action
@@ -20,6 +22,7 @@ type GitOCI struct {
 	// OCI remote
 	name   string // may have same value as address
 	addess string
+	remote model.Modeler
 
 	Option
 
@@ -39,6 +42,17 @@ func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version 
 
 // Runs the Hello action
 func (action *GitOCI) Run(ctx context.Context) error {
+	// TODO: This is a bit early, but sync.Once seems too much
+	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
+	if err != nil {
+		return fmt.Errorf("initializing remote graph target: %w", err)
+	}
+
+	action.remote, err = model.NewModeler(gt)
+	if err != nil {
+		return fmt.Errorf("initialize OCI modeler: %w", err)
+	}
+
 	// first command is always "capabilities"
 	c, err := action.batcher.Read(ctx)
 	switch {
