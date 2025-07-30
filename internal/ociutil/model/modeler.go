@@ -49,9 +49,9 @@ type Modeler interface {
 	// DeleteRef removes a reference from the remote. The commit remains.
 	DeleteRef(ctx context.Context, ref plumbing.ReferenceName) error
 	// HeadRefs returns the existing head references.
-	HeadRefs() map[string]oci.ReferenceInfo
+	HeadRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
 	// TagRefs returns the existing tag references.
-	TagRefs() map[string]oci.ReferenceInfo
+	TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
 	// CommitExists uses a local repository to resolve the best known OCI layer containing the
 	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
 
@@ -84,14 +84,14 @@ type model struct {
 	newPacks []ocispec.Descriptor
 }
 
-func (m *model) Fetch(ctx context.Context, ref string) error {
-	gt, err := ociutil.NewGraphTarget(ctx, ref)
+func (m *model) Fetch(ctx context.Context, ociRemote string) error {
+	gt, err := ociutil.NewGraphTarget(ctx, ociRemote)
 	if err != nil {
 		return err
 	}
 
 	slog.DebugContext(ctx, "resolving manifest descriptor")
-	manDesc, err := gt.Resolve(ctx, ref)
+	manDesc, err := gt.Resolve(ctx, ociRemote)
 	if err != nil {
 		return fmt.Errorf("resolving manifest descriptor: %w", err)
 	}
@@ -119,14 +119,14 @@ func (m *model) Fetch(ctx context.Context, ref string) error {
 	return nil
 }
 
-func (m *model) FetchOrDefault(ctx context.Context, ref string) error {
-	err := m.Fetch(ctx, ref)
+func (m *model) FetchOrDefault(ctx context.Context, ociRemote string) error {
+	err := m.Fetch(ctx, ociRemote)
 	switch {
 	case errors.Is(err, errdef.ErrNotFound):
 		slog.InfoContext(ctx, "remote does not exist, initializing default manifest and config")
 		m.cfg = oci.ConfigGit{
-			Heads: make(map[string]oci.ReferenceInfo, 0),
-			Tags:  make(map[string]oci.ReferenceInfo, 0),
+			Heads: make(map[plumbing.ReferenceName]oci.ReferenceInfo, 0),
+			Tags:  make(map[plumbing.ReferenceName]oci.ReferenceInfo, 0),
 		}
 		m.man = ocispec.Manifest{
 			MediaType:    ocispec.MediaTypeImageManifest,
@@ -208,10 +208,10 @@ func (m *model) AddPack(ctx context.Context, path string, refs ...*plumbing.Refe
 func (m *model) UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error {
 	switch {
 	case ref.Name().IsBranch():
-		m.cfg.Heads[ref.String()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}
+		m.cfg.Heads[ref.Name()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}
 		return nil
 	case ref.Name().IsTag():
-		m.cfg.Tags[ref.String()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}
+		m.cfg.Tags[ref.Name()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}
 		return nil
 	default:
 		slog.WarnContext(ctx, "skipping unknown remote reference type", "reference", ref.String())
@@ -219,37 +219,37 @@ func (m *model) UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer
 	}
 }
 
-func (m *model) ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error) {
+func (m *model) ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, error) {
 	// TODO: go-git supports note references, we could too
 	var ok bool
 	var rInfo oci.ReferenceInfo
 	switch {
-	case ref.IsBranch():
-		rInfo, ok = m.cfg.Heads[ref.String()]
-	case ref.IsTag():
-		rInfo, ok = m.cfg.Tags[ref.String()]
+	case refName.IsBranch():
+		rInfo, ok = m.cfg.Heads[refName]
+	case refName.IsTag():
+		rInfo, ok = m.cfg.Tags[refName]
 	default:
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, ref.String())
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, refName.String())
 	}
 
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrReferenceNotFound, ref.String())
+		return nil, fmt.Errorf("%w: %s", ErrReferenceNotFound, refName.String())
 	}
-	return plumbing.NewHashReference(ref, plumbing.NewHash(rInfo.Commit)), nil
+	return plumbing.NewHashReference(refName, plumbing.NewHash(rInfo.Commit)), nil
 }
 
-func (m *model) DeleteRef(ctx context.Context, ref plumbing.ReferenceName) error {
-	slog.InfoContext(ctx, "deleting reference from remote", "ref", ref.String())
+func (m *model) DeleteRef(ctx context.Context, refName plumbing.ReferenceName) error {
+	slog.InfoContext(ctx, "deleting reference from remote", "ref", refName.String())
 
 	switch {
-	case ref.IsBranch():
-		delete(m.cfg.Heads, ref.String())
+	case refName.IsBranch():
+		delete(m.cfg.Heads, refName)
 		return nil
-	case ref.IsTag():
-		delete(m.cfg.Tags, ref.String())
+	case refName.IsTag():
+		delete(m.cfg.Tags, refName)
 		return nil
 	default:
-		return fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, ref.String())
+		return fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, refName.String())
 	}
 }
 
@@ -294,16 +294,16 @@ func (m *model) sortRefsByLayer() map[digest.Digest][]plumbing.Hash {
 }
 
 // TODO: these listing functions may be problematic if the remote has not yet been fetched.
-func (m *model) HeadRefs() map[string]oci.ReferenceInfo {
+func (m *model) HeadRefs() map[plumbing.ReferenceName]oci.ReferenceInfo {
 	if m.cfg.Heads == nil {
-		return map[string]oci.ReferenceInfo{}
+		return map[plumbing.ReferenceName]oci.ReferenceInfo{}
 	}
 	return m.cfg.Heads
 }
 
-func (m *model) TagRefs() map[string]oci.ReferenceInfo {
+func (m *model) TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo {
 	if m.cfg.Tags == nil {
-		return map[string]oci.ReferenceInfo{}
+		return map[plumbing.ReferenceName]oci.ReferenceInfo{}
 	}
 	return m.cfg.Tags
 }

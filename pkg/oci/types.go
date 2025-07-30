@@ -1,6 +1,7 @@
 package oci
 
 import (
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -22,10 +23,10 @@ const (
 // ConfigGit is an OCI manifest config, containing information about a Git repository's references.
 type ConfigGit struct {
 	// Heads map Git head references to commit OID and layer digest pairs.
-	Heads map[string]ReferenceInfo `json:"heads"`
+	Heads map[plumbing.ReferenceName]ReferenceInfo `json:"heads"`
 
 	// Tags map Git tag references to commit OID and layer digest pairs.
-	Tags map[string]ReferenceInfo `json:"tags"`
+	Tags map[plumbing.ReferenceName]ReferenceInfo `json:"tags"`
 }
 
 // ReferenceInfo holds informations about Git references stored in bundle layers.

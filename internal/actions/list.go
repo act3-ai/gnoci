@@ -56,7 +56,7 @@ func (action *GitOCI) listRefs(ctx context.Context, headRef *plumbing.Reference)
 	// TODO: what about refs/remotes/<shortname>/<ref>
 	for k, v := range action.remote.HeadRefs() {
 		// list HEAD if one exists locally
-		if headRef != nil && (k == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
+		if headRef != nil && (k.String() == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
 			s := fmt.Sprintf("@%s HEAD", headRef.Name())
 			if err := action.batcher.Write(ctx, s); err != nil {
 				return fmt.Errorf("writing ref to Git: %w", err)
