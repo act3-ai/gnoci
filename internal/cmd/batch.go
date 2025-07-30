@@ -75,7 +75,7 @@ func (b *batcher) Read(ctx context.Context) (Git, error) {
 		return Git{}, fmt.Errorf("reading single command from Git: %w", b.in.Err())
 	case !ok:
 		// EOF
-		return Git{Cmd: Empty}, nil
+		return Git{Cmd: Done}, nil
 	default:
 		txt := b.in.Text()
 		slog.DebugContext(ctx, "read line from Git", "text", txt)

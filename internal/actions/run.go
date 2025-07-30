@@ -90,8 +90,9 @@ func (action *GitOCI) Run(ctx context.Context) error {
 		}
 
 		switch c.Cmd {
+		case cmd.Done:
+			done = true
 		case cmd.Empty:
-			// done = true
 			continue
 		case cmd.Capabilities:
 			// Git shouldn't need to do this again, but let's be safe
@@ -139,5 +140,5 @@ func (action *GitOCI) Run(ctx context.Context) error {
 		return fmt.Errorf("cleaning up temporary files: %w", err)
 	}
 
-	return fmt.Errorf("not implemented")
+	return nil
 }

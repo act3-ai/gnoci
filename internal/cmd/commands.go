@@ -28,8 +28,9 @@ const (
 	Push         Type = "push"
 	// Fetch                = "fetch"
 
-	// not a Git convention, marks end of input
-	Empty Type = "empty"
+	// not a Git convention
+	Empty Type = "empty" // marks empty line - a separator
+	Done  Type = "done"  // marks end of input
 )
 
 // Commands defines all implemented git-remote-helper commands.
