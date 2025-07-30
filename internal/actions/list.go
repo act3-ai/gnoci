@@ -2,22 +2,17 @@ package actions
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 
-	"github.com/act3-ai/gitoci/internal/ociutil"
-	"github.com/act3-ai/gitoci/pkg/oci"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"oras.land/oras-go/v2/content"
 )
 
 // list handles the `list` command. Lists refs, one per line.
 func (action *GitOCI) list(ctx context.Context, forPush bool) error {
-	_, config, err := action.fetchMetadata(ctx)
+	err := action.remote.FetchOrDefault(ctx, action.addess)
 	if err != nil {
 		return err
 	}
@@ -30,47 +25,11 @@ func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 		}
 	}
 
-	if err := action.listRefs(ctx, config, headRef); err != nil {
+	if err := action.listRefs(ctx, headRef); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// fetchMetadata fetches an OCI Git manifests config from a remote.
-func (action *GitOCI) fetchMetadata(ctx context.Context) (man ocispec.Manifest, cfg oci.ConfigGit, err error) {
-	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
-	if err != nil {
-		return man, cfg, err
-	}
-
-	slog.DebugContext(ctx, "resolving manifest descriptor")
-	manDesc, err := gt.Resolve(ctx, action.addess)
-	if err != nil {
-		return man, cfg, fmt.Errorf("resolving manifest descriptor: %w", err)
-	}
-
-	slog.DebugContext(ctx, "fetching manifest")
-	manRaw, err := content.FetchAll(ctx, gt, manDesc)
-	if err != nil {
-		return man, cfg, fmt.Errorf("fetching manifest: %w", err)
-	}
-
-	if err := json.Unmarshal(manRaw, &man); err != nil {
-		return man, cfg, fmt.Errorf("decoding manifest: %w", err)
-	}
-
-	slog.DebugContext(ctx, "fetching config")
-	cfgRaw, err := content.FetchAll(ctx, gt, man.Config)
-	if err != nil {
-		return man, cfg, fmt.Errorf("fetching config: %w", err)
-	}
-
-	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
-		return man, cfg, fmt.Errorf("decoding config: %w", err)
-	}
-
-	return man, cfg, nil
 }
 
 // resolveLocalHead returns the local HEAD, if one exists.
@@ -85,7 +44,7 @@ func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference
 	if err != nil {
 		slog.InfoContext(ctx, "local HEAD not found")
 	} else {
-		slog.InfoContext(ctx, "head ref", "target", headRef.Target().String(), "name", headRef.Name().String())
+		slog.InfoContext(ctx, "head ref", "target", headRef.Hash().String(), "name", headRef.Name().String())
 	}
 
 	return headRef, nil
@@ -93,9 +52,9 @@ func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference
 
 // listRefs responds to the list command by writing resolved remote references,
 // and the remote HEAD if a local HEAD exists.
-func (action *GitOCI) listRefs(ctx context.Context, config oci.ConfigGit, headRef *plumbing.Reference) error {
+func (action *GitOCI) listRefs(ctx context.Context, headRef *plumbing.Reference) error {
 	// TODO: what about refs/remotes/<shortname>/<ref>
-	for k, v := range config.Heads {
+	for k, v := range action.remote.HeadRefs() {
 		// list HEAD if one exists locally
 		if headRef != nil && (k == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
 			s := fmt.Sprintf("@%s HEAD", headRef.Name())
@@ -110,7 +69,7 @@ func (action *GitOCI) listRefs(ctx context.Context, config oci.ConfigGit, headRe
 		}
 	}
 
-	for k, v := range config.Tags {
+	for k, v := range action.remote.TagRefs() {
 		s := fmt.Sprintf("%s refs/tags/%s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
