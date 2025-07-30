@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/act3-ai/gitoci/internal/cmd"
@@ -61,7 +62,9 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 
 	// resolve state of refs in remote
 	newCommits := make([]plumbing.Hash, 0)
+	refsInNewPack := make([]*plumbing.Reference, 0) // len <= newCommites
 	for _, c := range cmds {
+		// TODO: split this monstrosity
 		l, r, err := parseRefPair(c)
 		if err != nil {
 			return fmt.Errorf("parsing push command: %w", err)
@@ -87,14 +90,46 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 		}
 
 		// update metadata as needed
-		newCommit, err := action.updateRemoteMetadata(ctx, localRef, remoteRef)
+		refStatus, layer, err := action.compareRefs(localRef, remoteRef)
+		if err != nil {
+			return fmt.Errorf("comparing local ref %sand remote ref %s: %w", localRef.Name().String(), remoteRef.Name().String(), err)
+		}
+
 		switch {
-		case err != nil:
-			return fmt.Errorf("updating remote metadata: %w", err)
-		case newCommit.IsZero():
-			// reference-only update
+		case (refStatus & statusDelete) == statusDelete:
+			err := action.remote.DeleteRef(ctx, remoteRef.Name())
+			if errors.Is(err, model.ErrUnsupportedReferenceType) {
+				slog.WarnContext(ctx, "encountered unsupported reference type when deleting remote reference", "ref", remoteRef.Name().String())
+				continue
+			}
+			if err != nil {
+				return err
+			}
+		case (refStatus & statusForce) == statusForce:
+			fallthrough
+		case (refStatus & statusAddCommit) == statusAddCommit:
+			newCommits = append(newCommits, localRef.Hash())
+			if layer == "" {
+				// defer the ref update until we know which the packfile layer digest
+				refsInNewPack = append(refsInNewPack, plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()))
+				continue
+			}
+			fallthrough
+		case (refStatus & statusUpdateRef) == statusUpdateRef:
+			// update remote ref's commit to local ref's
+			err := action.remote.UpdateRef(ctx, *plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()), layer)
+			if errors.Is(err, model.ErrUnsupportedReferenceType) {
+				slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", remoteRef.Name().String())
+				continue
+			}
+			if err != nil {
+				return err
+			}
 		default:
-			newCommits = append(newCommits, newCommit)
+			// where did we go wrong?
+			// return fmt.Errorf("insufficient handling of reference comparison for local ref %s and remote ref %s", localRef.Name().String(), remoteRef.Name().String())
+			// TODO: add a "skip" status when refs are skipped due to lack of support for its type?
+			// without it, the above error hits those cases where we log the skip elsewhere
 		}
 	}
 
@@ -109,12 +144,28 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	}
 
 	// TODO: hopefully this isn't necessary, and we can open a reader using go-git methods
-	packPath := path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.pack", packHash.String()))
+	packPath, err := filepath.Abs(path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.pack", packHash.String())))
+	if err != nil {
+		return fmt.Errorf("resolving absolute path: %w", err)
+	}
 	// idxPath := path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.idx", packHash.String()))
 
-	_, err = action.remote.AddPack(ctx, packPath)
+	slog.InfoContext(ctx, "gitDir", "gitDir", action.gitDir)
+	packDesc, err := action.remote.AddPack(ctx, packPath)
 	if err != nil {
 		return fmt.Errorf("adding packfile to OCI data model: %w", err)
+	}
+
+	// update deferred ref updates
+	for _, ref := range refsInNewPack {
+		err := action.remote.UpdateRef(ctx, *ref, packDesc.Digest)
+		if errors.Is(err, model.ErrUnsupportedReferenceType) {
+			slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", ref.Name().String())
+			continue
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	desc, err := action.remote.Push(ctx, action.addess)
@@ -124,53 +175,6 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	slog.InfoContext(ctx, "successfully pushed to remote", "address", action.addess, "digest", desc.Digest, "size", desc.Size)
 
 	return nil
-}
-
-func (action *GitOCI) updateRemoteMetadata(ctx context.Context, localRef, remoteRef *plumbing.Reference) (plumbing.Hash, error) {
-	refStatus, layer, err := action.compareRefs(localRef, remoteRef)
-	if err != nil {
-		return plumbing.ZeroHash, fmt.Errorf("comparing local ref %sand remote ref %s: %w", localRef.Name().String(), remoteRef.Name().String(), err)
-	}
-
-	var newCommit plumbing.Hash
-	switch {
-	case (refStatus & statusDelete) == statusDelete:
-		err := action.remote.DeleteRef(ctx, remoteRef.Name())
-		if errors.Is(err, model.ErrUnsupportedReferenceType) {
-			slog.WarnContext(ctx, "encountered unsupported reference type when deleting remote reference", "ref", remoteRef.Name().String())
-			return plumbing.ZeroHash, nil
-		}
-		if err != nil {
-			return plumbing.ZeroHash, err
-		}
-	case (refStatus & statusForce) == statusForce:
-		fallthrough
-	case (refStatus & statusAddCommit) == statusAddCommit:
-		// sanity
-		// TODO: ideally, this isn't necessary if we test properly
-		if layer == "" {
-			return plumbing.ZeroHash, fmt.Errorf("expected OCI layer with ref status add commit")
-		}
-		newCommit = localRef.Hash()
-		fallthrough
-	case (refStatus & statusUpdateRef) == statusUpdateRef:
-		// update remote ref's commit to local ref's
-		err := action.remote.UpdateRef(ctx, *plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()), layer)
-		if errors.Is(err, model.ErrUnsupportedReferenceType) {
-			slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", remoteRef.Name().String())
-			return plumbing.ZeroHash, nil
-		}
-		if err != nil {
-			return plumbing.ZeroHash, err
-		}
-	default:
-		// where did we go wrong?
-		// return fmt.Errorf("insufficient handling of reference comparison for local ref %s and remote ref %s", localRef.Name().String(), remoteRef.Name().String())
-		// TODO: add a "skip" status when refs are skipped due to lack of support for its type?
-		// without it, the above error hits those cases where we log the skip elsewhere
-	}
-
-	return newCommit, nil
 }
 
 // compareRefs resolves what's needed for a remoteRef to be updated to localRef.
@@ -191,22 +195,26 @@ func (action *GitOCI) compareRefs(localRef, remoteRef *plumbing.Reference) (stat
 	// 	s = s | statusForce
 	// }
 
-	remoteCommit, err := action.localRepo.CommitObject(remoteRef.Hash())
-	if err != nil {
-		return s, "", fmt.Errorf("resolving commit object from hash for remote ref: %w", err)
-	}
-
 	localCommit, err := action.localRepo.CommitObject(localRef.Hash())
 	if err != nil {
 		return s, "", fmt.Errorf("resolving commit object from hash for local ref: %w", err)
 	}
 
-	// TODO: something smells off here...
-	isAncestor, err := remoteCommit.IsAncestor(localCommit)
-	if err != nil {
-		return s, "", fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
-	}
-	if isAncestor {
+	if !remoteRef.Hash().IsZero() {
+		remoteCommit, err := action.localRepo.CommitObject(remoteRef.Hash())
+		if err != nil {
+			return s, "", fmt.Errorf("resolving commit object from hash for remote ref: %w", err)
+		}
+
+		// TODO: something smells off here...
+		isAncestor, err := remoteCommit.IsAncestor(localCommit)
+		if err != nil {
+			return s, "", fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
+		}
+		if isAncestor {
+			s = s | statusUpdateRef
+		}
+	} else {
 		s = s | statusUpdateRef
 	}
 

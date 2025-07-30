@@ -48,6 +48,10 @@ type Modeler interface {
 	ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error)
 	// DeleteRef removes a reference from the remote. The commit remains.
 	DeleteRef(ctx context.Context, ref plumbing.ReferenceName) error
+	// HeadRefs returns the existing head references.
+	HeadRefs() map[string]oci.ReferenceInfo
+	// TagRefs returns the existing tag references.
+	TagRefs() map[string]oci.ReferenceInfo
 	// CommitExists uses a local repository to resolve the best known OCI layer containing the
 	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
 
@@ -278,4 +282,19 @@ func (m *model) sortRefsByLayer() map[digest.Digest][]plumbing.Hash {
 	}
 
 	return layerResolver
+}
+
+// TODO: these listing functions may be problematic if the remote has not yet been fetched.
+func (m *model) HeadRefs() map[string]oci.ReferenceInfo {
+	if m.cfg.Heads == nil {
+		return map[string]oci.ReferenceInfo{}
+	}
+	return m.cfg.Heads
+}
+
+func (m *model) TagRefs() map[string]oci.ReferenceInfo {
+	if m.cfg.Tags == nil {
+		return map[string]oci.ReferenceInfo{}
+	}
+	return m.cfg.Tags
 }
