@@ -38,11 +38,11 @@ type Modeler interface {
 	Push(ctx context.Context, ref string) (ocispec.Descriptor, error)
 	// AddPack adds a packfile as a layer to the Git OCI data model. refs are the
 	// updated remote references.
-	AddPack(ctx context.Context, path string, refs ...plumbing.Reference) (ocispec.Descriptor, error)
+	AddPack(ctx context.Context, path string, refs ...*plumbing.Reference) (ocispec.Descriptor, error)
 	// UpdateRef updates a Git reference and the object it points to in the
 	// Git OCI data model. Useful for updating a reference where its object
 	// is within a packfile that already exists in the remote OCI registry.
-	UpdateRef(ctx context.Context, gitRef plumbing.Reference, ociLayer digest.Digest) error
+	UpdateRef(ctx context.Context, gitRef *plumbing.Reference, ociLayer digest.Digest) error
 	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
 	// the ref does not exist or if not supported (head or tag ref).
 	ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error)
@@ -180,7 +180,7 @@ func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error
 	return manDesc, nil
 }
 
-func (m *model) AddPack(ctx context.Context, path string, refs ...plumbing.Reference) (ocispec.Descriptor, error) {
+func (m *model) AddPack(ctx context.Context, path string, refs ...*plumbing.Reference) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "adding packfile to Git OCI manifest", "path", path)
 	// filepath.Base adds an annotation for the filename, without exposing a user's filesystem
 	desc, err := m.fstore.Add(ctx, filepath.Base(path), oci.MediaTypePackLayer, path)
@@ -193,10 +193,12 @@ func (m *model) AddPack(ctx context.Context, path string, refs ...plumbing.Refer
 		m.UpdateRef(ctx, ref, desc.Digest)
 	}
 
+	m.newPacks = append(m.newPacks, desc)
+
 	return desc, nil
 }
 
-func (m *model) UpdateRef(ctx context.Context, ref plumbing.Reference, ociLayer digest.Digest) error {
+func (m *model) UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error {
 	switch {
 	case ref.Name().IsBranch():
 		m.cfg.Heads[ref.String()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}

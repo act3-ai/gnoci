@@ -117,7 +117,7 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 			fallthrough
 		case (refStatus & statusUpdateRef) == statusUpdateRef:
 			// update remote ref's commit to local ref's
-			err := action.remote.UpdateRef(ctx, *plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()), layer)
+			err := action.remote.UpdateRef(ctx, plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()), layer)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
 				slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", remoteRef.Name().String())
 				continue
@@ -150,15 +150,16 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	}
 	// idxPath := path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.idx", packHash.String()))
 
-	slog.InfoContext(ctx, "gitDir", "gitDir", action.gitDir)
-	packDesc, err := action.remote.AddPack(ctx, packPath)
-	if err != nil {
+	packDesc, err := action.remote.AddPack(ctx, packPath, refsInNewPack...)
+	// TODO: we're silently ignoring this error
+	if err != nil && !errors.Is(err, model.ErrUnsupportedReferenceType) {
 		return fmt.Errorf("adding packfile to OCI data model: %w", err)
 	}
 
 	// update deferred ref updates
+	// TODO:
 	for _, ref := range refsInNewPack {
-		err := action.remote.UpdateRef(ctx, *ref, packDesc.Digest)
+		err := action.remote.UpdateRef(ctx, ref, packDesc.Digest)
 		if errors.Is(err, model.ErrUnsupportedReferenceType) {
 			slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", ref.Name().String())
 			continue
