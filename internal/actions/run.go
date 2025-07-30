@@ -4,9 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/act3-ai/gitoci/internal/cmd"
+	"github.com/act3-ai/gitoci/internal/ociutil"
+	"github.com/act3-ai/gitoci/internal/ociutil/model"
+	"github.com/go-git/go-git/v5"
+	"oras.land/oras-go/v2/content/file"
 )
 
 // GitOCI represents the base action
@@ -15,11 +20,13 @@ type GitOCI struct {
 	batcher cmd.BatchReadWriter
 
 	// local repository
-	gitDir string
+	gitDir    string
+	localRepo *git.Repository
 
 	// OCI remote
 	name   string // may have same value as address
 	addess string
+	remote model.Modeler
 
 	Option
 
@@ -39,6 +46,29 @@ func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version 
 
 // Runs the Hello action
 func (action *GitOCI) Run(ctx context.Context) error {
+	// TODO: This is a bit early, but sync.Once seems too much
+	// TODO: The next 4 "sections" are simply setting up a model.Modeler, not a fan
+	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
+	if err != nil {
+		return fmt.Errorf("initializing remote graph target: %w", err)
+	}
+
+	tmpDir := os.TempDir()
+	defer os.RemoveAll(tmpDir)
+
+	fstorePath, err := os.MkdirTemp(tmpDir, "GitOCI-fstore-*")
+	if err != nil {
+		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
+	}
+
+	fstore, err := file.New(fstorePath)
+	if err != nil {
+		return fmt.Errorf("initializing OCI filestore: %w", err)
+	}
+	defer fstore.Close()
+
+	action.remote = model.NewModeler(fstore, gt)
+
 	// first command is always "capabilities"
 	c, err := action.batcher.Read(ctx)
 	switch {
@@ -60,8 +90,9 @@ func (action *GitOCI) Run(ctx context.Context) error {
 		}
 
 		switch c.Cmd {
+		case cmd.Done:
+			done = true
 		case cmd.Empty:
-			// done = true
 			continue
 		case cmd.Capabilities:
 			// Git shouldn't need to do this again, but let's be safe
@@ -76,6 +107,17 @@ func (action *GitOCI) Run(ctx context.Context) error {
 			if err := action.list(ctx, (c.SubCmd == cmd.ListForPush)); err != nil {
 				return fmt.Errorf("running list command: %w", err)
 			}
+		case cmd.Push:
+			// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
+			batch, err := action.batcher.ReadBatch(ctx)
+			if err != nil {
+				return fmt.Errorf("reading push batch: %w", err)
+			}
+			fullBatch := append([]cmd.Git{c}, batch...)
+
+			if err := action.push(ctx, fullBatch); err != nil {
+				return fmt.Errorf("running push command: %w", err)
+			}
 		default:
 			return fmt.Errorf("default case hit")
 		}
@@ -88,5 +130,15 @@ func (action *GitOCI) Run(ctx context.Context) error {
 	// 	return fmt.Errorf("reading batch input: %w", err)
 	// }
 
-	return fmt.Errorf("not implemented")
+	// TODO: not a fan of this pattern, but it's nice to catch the errors...
+	// ideally we "do our best to cleanup"
+	if err := fstore.Close(); err != nil {
+		return fmt.Errorf("closing OCI file store: %w", err)
+	}
+
+	if err := os.RemoveAll(tmpDir); err != nil {
+		return fmt.Errorf("cleaning up temporary files: %w", err)
+	}
+
+	return nil
 }

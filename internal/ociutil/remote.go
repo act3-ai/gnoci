@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/act3-ai/go-common/pkg/logger"
@@ -70,7 +71,7 @@ func create(ctx context.Context, ref registry.Reference, noncompliant bool, user
 				Credential: credentials.Credential(credStore),
 			},
 			Reference:       ref,
-			PlainHTTP:       true,
+			PlainHTTP:       (strings.HasPrefix(ref.Registry, "localhost") || strings.HasPrefix(ref.Registry, "127.0.0.1")), // HACK: we need a config
 			SkipReferrersGC: true,
 		},
 	}

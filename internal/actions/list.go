@@ -2,22 +2,17 @@ package actions
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 
-	"github.com/act3-ai/gitoci/internal/ociutil"
-	"github.com/act3-ai/gitoci/pkg/oci"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"oras.land/oras-go/v2/content"
 )
 
 // list handles the `list` command. Lists refs, one per line.
 func (action *GitOCI) list(ctx context.Context, forPush bool) error {
-	config, err := action.fetchConfig(ctx)
+	err := action.remote.FetchOrDefault(ctx, action.addess)
 	if err != nil {
 		return err
 	}
@@ -30,49 +25,11 @@ func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 		}
 	}
 
-	if err := action.listRefs(ctx, config, headRef); err != nil {
+	if err := action.listRefs(ctx, headRef); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// fetchConfig decodes an OCI Git config from a remote.
-func (action *GitOCI) fetchConfig(ctx context.Context) (oci.ConfigGit, error) {
-	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
-	if err != nil {
-		return oci.ConfigGit{}, err
-	}
-
-	slog.DebugContext(ctx, "resolving manifest descriptor")
-	manDesc, err := gt.Resolve(ctx, action.addess)
-	if err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("resolving manifest descriptor: %w", err)
-	}
-
-	slog.DebugContext(ctx, "fetching manifest")
-	manRaw, err := content.FetchAll(ctx, gt, manDesc)
-	if err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("fetching manifest: %w", err)
-	}
-
-	var manifest ocispec.Manifest
-	if err := json.Unmarshal(manRaw, &manifest); err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("decoding manifest: %w", err)
-	}
-
-	slog.DebugContext(ctx, "fetching config")
-	cfgRaw, err := content.FetchAll(ctx, gt, manifest.Config)
-	if err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("fetching config: %w", err)
-	}
-
-	var config oci.ConfigGit
-	if err := json.Unmarshal(cfgRaw, &config); err != nil {
-		return oci.ConfigGit{}, fmt.Errorf("decoding config: %w", err)
-	}
-
-	return config, nil
 }
 
 // resolveLocalHead returns the local HEAD, if one exists.
@@ -87,7 +44,7 @@ func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference
 	if err != nil {
 		slog.InfoContext(ctx, "local HEAD not found")
 	} else {
-		slog.InfoContext(ctx, "head ref", "target", headRef.Target().String(), "name", headRef.Name().String())
+		slog.InfoContext(ctx, "head ref", "target", headRef.Hash().String(), "name", headRef.Name().String())
 	}
 
 	return headRef, nil
@@ -95,11 +52,11 @@ func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference
 
 // listRefs responds to the list command by writing resolved remote references,
 // and the remote HEAD if a local HEAD exists.
-func (action *GitOCI) listRefs(ctx context.Context, config oci.ConfigGit, headRef *plumbing.Reference) error {
+func (action *GitOCI) listRefs(ctx context.Context, headRef *plumbing.Reference) error {
 	// TODO: what about refs/remotes/<shortname>/<ref>
-	for k, v := range config.Heads {
+	for k, v := range action.remote.HeadRefs() {
 		// list HEAD if one exists locally
-		if headRef != nil && (k == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
+		if headRef != nil && (k.String() == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
 			s := fmt.Sprintf("@%s HEAD", headRef.Name())
 			if err := action.batcher.Write(ctx, s); err != nil {
 				return fmt.Errorf("writing ref to Git: %w", err)
@@ -112,7 +69,7 @@ func (action *GitOCI) listRefs(ctx context.Context, config oci.ConfigGit, headRe
 		}
 	}
 
-	for k, v := range config.Tags {
+	for k, v := range action.remote.TagRefs() {
 		s := fmt.Sprintf("%s refs/tags/%s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
@@ -125,12 +82,6 @@ func (action *GitOCI) listRefs(ctx context.Context, config oci.ConfigGit, headRe
 
 	return nil
 }
-
-// listForPush handles the `list for-push` command.
-// Similar to list, except only used to prepare for a push.
-// func (action *GitOCI) listForPush() error {
-
-// }
 
 // TODO: This func lists local refs, which we likley don't even need as git should do this for us,
 // but we'll keep this code block around as a comment for now incase we need it.
