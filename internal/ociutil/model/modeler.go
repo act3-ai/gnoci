@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/act3-ai/gitoci/internal/ociutil"
@@ -23,12 +22,13 @@ import (
 	"oras.land/oras-go/v2/errdef"
 )
 
+var ErrUnsupportedReferenceType = errors.New("unsupported reference type")
+var ErrReferenceNotFound = errors.New("reference not found in remote data model")
+
 // Modeler allows for fetching, updating, and pushing a Git OCI data model to
 // an OCI registry.
 // TODO: Is this interface overloaded?
 type Modeler interface {
-	// Cleanup closes and removes any files opened during modeling or transfers.
-	Cleanup() error
 	// Fetch pulls Git OCI metadata from a remote. It does not pull layers.
 	Fetch(ctx context.Context, ref string) error
 	// FetchOrDefault extends Fetch to initialize an empty OCI manifest and config
@@ -41,13 +41,13 @@ type Modeler interface {
 	AddPack(ctx context.Context, path string, refs ...plumbing.Reference) (ocispec.Descriptor, error)
 	// UpdateRef updates a Git reference and the object it points to in the
 	// Git OCI data model. Useful for updating a reference where its object
-	// is within an existing packfile.
-	UpdateRef(ctx context.Context, gitRef plumbing.Reference, ociLayer digest.Digest)
+	// is within a packfile that already exists in the remote OCI registry.
+	UpdateRef(ctx context.Context, gitRef plumbing.Reference, ociLayer digest.Digest) error
 	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
 	// the ref does not exist or if not supported (head or tag ref).
 	ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error)
 	// DeleteRef removes a reference from the remote. The commit remains.
-	DeleteRef(ctx context.Context, ref plumbing.ReferenceName)
+	DeleteRef(ctx context.Context, ref plumbing.ReferenceName) error
 	// CommitExists uses a local repository to resolve the best known OCI layer containing the
 	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
 
@@ -55,24 +55,16 @@ type Modeler interface {
 	// AddLFSFile(path string) (ocispec.Descriptor, error)
 }
 
-// NewModeler initializes a new modeler. It is the caller's responsibility to
-// Cleanup().
-func NewModeler(gt oras.GraphTarget) (Modeler, error) {
-	fstorePath, err := os.MkdirTemp(os.TempDir(), "GitOCI-fstore-*")
-	if err != nil {
-		return nil, fmt.Errorf("creating temporary directory for intermediate git repository: %w", err)
-	}
+// fetcher
+// pusher
+// updater
 
-	fstore, err := file.New(fstorePath)
-	if err != nil {
-		return nil, fmt.Errorf("initializing shared filestore: %w", err)
-	}
-
+// NewModeler initializes a new modeler.
+func NewModeler(fstore *file.Store, gt oras.GraphTarget) Modeler {
 	return &model{
-		gt:         gt,
-		fstore:     fstore,
-		fstorePath: fstorePath,
-	}, nil
+		gt:     gt,
+		fstore: fstore,
+	}
 }
 
 // model implements Modeler.
@@ -86,18 +78,6 @@ type model struct {
 	man      ocispec.Manifest
 	cfg      oci.ConfigGit
 	newPacks []ocispec.Descriptor
-}
-
-func (m *model) Cleanup() error {
-	if err := m.fstore.Close(); err != nil {
-		return fmt.Errorf("closing intermediate OCI file store: %w", err)
-	}
-
-	if err := os.RemoveAll(m.fstorePath); err != nil {
-		return fmt.Errorf("removing intermediate OCI file store, path = %s: %w", m.fstorePath, err)
-	}
-
-	return nil
 }
 
 func (m *model) Fetch(ctx context.Context, ref string) error {
@@ -212,18 +192,22 @@ func (m *model) AddPack(ctx context.Context, path string, refs ...plumbing.Refer
 	return desc, nil
 }
 
-func (m *model) UpdateRef(ctx context.Context, ref plumbing.Reference, ociLayer digest.Digest) {
+func (m *model) UpdateRef(ctx context.Context, ref plumbing.Reference, ociLayer digest.Digest) error {
 	switch {
 	case ref.Name().IsBranch():
 		m.cfg.Heads[ref.String()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}
+		return nil
 	case ref.Name().IsTag():
 		m.cfg.Tags[ref.String()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}
+		return nil
 	default:
 		slog.WarnContext(ctx, "skipping unknown remote reference type", "reference", ref.String())
+		return fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, ref.String())
 	}
 }
 
 func (m *model) ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error) {
+	// TODO: go-git supports note references, we could too
 	var ok bool
 	var rInfo oci.ReferenceInfo
 	switch {
@@ -232,27 +216,27 @@ func (m *model) ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*pl
 	case ref.IsTag():
 		rInfo, ok = m.cfg.Tags[ref.String()]
 	default:
-		slog.WarnContext(ctx, "skipping resolution unknown remote reference type", "reference", ref.String())
-		return nil, nil
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, ref.String())
 	}
 
-	if ok {
-		return plumbing.NewHashReference(ref, plumbing.NewHash(rInfo.Commit)), nil
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrReferenceNotFound, ref.String())
 	}
-	return nil, nil
+	return plumbing.NewHashReference(ref, plumbing.NewHash(rInfo.Commit)), nil
 }
 
-func (m *model) DeleteRef(ctx context.Context, ref plumbing.ReferenceName) {
+func (m *model) DeleteRef(ctx context.Context, ref plumbing.ReferenceName) error {
 	slog.InfoContext(ctx, "deleting reference from remote", "ref", ref.String())
 
 	switch {
 	case ref.IsBranch():
 		delete(m.cfg.Heads, ref.String())
+		return nil
 	case ref.IsTag():
 		delete(m.cfg.Tags, ref.String())
+		return nil
 	default:
-		slog.WarnContext(ctx, "skipping deletion unknown remote reference type", "reference", ref.String())
-		return
+		return fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, ref.String())
 	}
 }
 
