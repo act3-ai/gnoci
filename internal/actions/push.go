@@ -39,31 +39,35 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	// resolve state of refs in remote
 	newCommits := make([]plumbing.Hash, 0)          // TODO: not used properly yet, but will be when thin packs are handled properly
 	refsInNewPack := make([]*plumbing.Reference, 0) // len <= newCommites
+	results := make([]string, 0, len(cmds))
 	for _, c := range cmds {
 		// TODO: split this monstrosity
 		l, r, force, err := parseRefPair(c)
 		if err != nil {
-			return fmt.Errorf("parsing push command: %w", err)
+			results = append(results, fmtResult(false, r, fmt.Errorf("parsing push command: %w", err).Error()))
+			continue
 		}
 
 		rp, err := rc.Compare(ctx, force, l, r)
 		if errors.Is(err, model.ErrUnsupportedReferenceType) {
-			slog.WarnContext(ctx, "encountered unsupported reference type when resolving remote reference", "err", err.Error())
+			results = append(results, fmtResult(false, r, fmt.Errorf("encountered unsupported reference type when comparing local to remote ref: %w", err).Error()))
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("comparing local ref %s to remote ref %s: %w", l.String(), r.String(), err)
+			results = append(results, fmtResult(false, r, fmt.Errorf("comparing local ref to remote ref: %w", err).Error()))
+			continue
 		}
 
 		switch {
 		case (rp.status & statusDelete) == statusDelete:
 			err := action.remote.DeleteRef(ctx, r)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
-				slog.WarnContext(ctx, "encountered unsupported reference type when deleting remote reference", "ref", r.String())
+				results = append(results, fmtResult(false, r, fmt.Errorf("encountered unsupported reference type when deleting remote ref: %w", err).Error()))
 				continue
 			}
 			if err != nil {
-				return err
+				results = append(results, fmtResult(false, r, fmt.Errorf("deleting reference from remote: %w", err).Error()))
+				continue
 			}
 		case (rp.status & statusForce) == statusForce:
 			fallthrough
@@ -79,11 +83,12 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 			// update remote ref's commit to local ref's
 			err := action.remote.UpdateRef(ctx, plumbing.NewHashReference(rp.remote.Name(), rp.local.Hash()), rp.layer)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
-				slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", rp.remote.Name().String())
+				results = append(results, fmtResult(false, r, fmt.Errorf("encountered unsupported reference type when updating remote ref: %w", err).Error()))
 				continue
 			}
 			if err != nil {
-				return err
+				results = append(results, fmtResult(false, r, fmt.Errorf("updating remote reference: %w", err).Error()))
+				continue
 			}
 		default:
 			// where did we go wrong?
@@ -91,6 +96,7 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 			// TODO: add a "skip" status when refs are skipped due to lack of support for its type?
 			// without it, the above error hits those cases where we log the skip elsewhere
 		}
+		results = append(results, fmtResult(true, r, ""))
 	}
 
 	// TODO: resolve common ancestors for thin pack
@@ -122,7 +128,20 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	}
 	slog.InfoContext(ctx, "successfully pushed to remote", "address", action.addess, "digest", desc.Digest, "size", desc.Size)
 
+	if err := action.batcher.WriteBatch(ctx, results...); err != nil {
+		return fmt.Errorf("writing push results to git: %w", err)
+	}
+
 	return nil
+}
+
+// fmtResult aids in formating a result string written to git. Why is unnecessary if ok == true.
+func fmtResult(ok bool, dst plumbing.ReferenceName, why string) string {
+	if ok {
+		return fmt.Sprintf("ok %s", dst.String())
+	} else {
+		return fmt.Sprintf("error %s %s?", dst.String(), why)
+	}
 }
 
 // HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.
