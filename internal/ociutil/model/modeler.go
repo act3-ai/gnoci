@@ -83,6 +83,7 @@ type model struct {
 	fstorePath string
 
 	// populated on fetch
+	fetched     bool
 	man         ocispec.Manifest
 	cfg         oci.ConfigGit
 	refsByLayer map[digest.Digest][]plumbing.Hash
@@ -91,6 +92,10 @@ type model struct {
 }
 
 func (m *model) Fetch(ctx context.Context, ociRemote string) error {
+	if m.fetched {
+		return nil
+	}
+
 	gt, err := ociutil.NewGraphTarget(ctx, ociRemote)
 	if err != nil {
 		return err
