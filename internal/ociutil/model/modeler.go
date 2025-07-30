@@ -177,6 +177,10 @@ func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error
 		return ocispec.Descriptor{}, fmt.Errorf("packing and pushing base manifest: %w", err)
 	}
 
+	if err := m.gt.Tag(ctx, manDesc, ref); err != nil {
+		return manDesc, fmt.Errorf("tagging base manifest: %w", err)
+	}
+
 	return manDesc, nil
 }
 
@@ -189,13 +193,16 @@ func (m *model) AddPack(ctx context.Context, path string, refs ...*plumbing.Refe
 	}
 	m.man.Layers = append(m.man.Layers, desc)
 
+	updateErrs := make([]error, 0)
 	for _, ref := range refs {
-		m.UpdateRef(ctx, ref, desc.Digest)
+		if err := m.UpdateRef(ctx, ref, desc.Digest); err != nil {
+			updateErrs = append(updateErrs, err)
+		}
 	}
 
 	m.newPacks = append(m.newPacks, desc)
 
-	return desc, nil
+	return desc, errors.Join(updateErrs...)
 }
 
 func (m *model) UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error {
