@@ -15,11 +15,11 @@ type Capability = string
 const (
 	CapOption Capability = "option"
 	CapFetch  Capability = "fetch"
-	// CapPush   Capability = "push"
+	CapPush   Capability = "push"
 )
 
 func (action *GitOCI) capabilities(ctx context.Context) error {
-	capabilities := []Capability{CapOption, CapFetch}
+	capabilities := []Capability{CapOption, CapFetch, CapPush}
 	slog.DebugContext(ctx, "writing supported capabilities", "capabilities", fmt.Sprintf("%v", capabilities))
 	if err := action.batcher.WriteBatch(ctx, capabilities...); err != nil {
 		return fmt.Errorf("writing capabilities: %w", err)
