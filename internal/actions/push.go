@@ -69,13 +69,13 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 			fallthrough
 		case (rp.status & statusAddCommit) == statusAddCommit:
 			newCommits = append(newCommits, rp.local.Hash())
+			fallthrough
+		case (rp.status & statusUpdateRef) == statusUpdateRef:
 			if rp.layer == "" {
 				// defer the ref update until we know the packfile layer digest
 				refsInNewPack = append(refsInNewPack, plumbing.NewHashReference(rp.remote.Name(), rp.local.Hash()))
 				continue
 			}
-			fallthrough
-		case (rp.status & statusUpdateRef) == statusUpdateRef:
 			// update remote ref's commit to local ref's
 			err := action.remote.UpdateRef(ctx, plumbing.NewHashReference(rp.remote.Name(), rp.local.Hash()), rp.layer)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
