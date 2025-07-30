@@ -47,15 +47,18 @@ func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version 
 // Runs the Hello action
 func (action *GitOCI) Run(ctx context.Context) error {
 	// TODO: This is a bit early, but sync.Once seems too much
-	// TODO: The next 4 "sections" are simply setting up a model.Modeler, not a fan
+	// TODO: The next 5 "sections" are alot of setup that should be condensed
 	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
 	if err != nil {
 		return fmt.Errorf("initializing remote graph target: %w", err)
 	}
 
-	tmpDir := os.TempDir()
-	defer os.RemoveAll(tmpDir)
+	action.localRepo, err = git.PlainOpen(action.gitDir)
+	if err != nil {
+		return fmt.Errorf("opening local repository: %w", err)
+	}
 
+	tmpDir := os.TempDir()
 	fstorePath, err := os.MkdirTemp(tmpDir, "GitOCI-fstore-*")
 	if err != nil {
 		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
@@ -118,6 +121,16 @@ func (action *GitOCI) Run(ctx context.Context) error {
 			if err := action.push(ctx, fullBatch); err != nil {
 				return fmt.Errorf("running push command: %w", err)
 			}
+		case cmd.Fetch:
+			batch, err := action.batcher.ReadBatch(ctx)
+			if err != nil {
+				return fmt.Errorf("reading fetch batch: %w", err)
+			}
+			fullBatch := append([]cmd.Git{c}, batch...)
+
+			if err := action.fetch(ctx, fullBatch); err != nil {
+				return fmt.Errorf("running fetch command: %w", err)
+			}
 		default:
 			return fmt.Errorf("default case hit")
 		}
@@ -136,7 +149,7 @@ func (action *GitOCI) Run(ctx context.Context) error {
 		return fmt.Errorf("closing OCI file store: %w", err)
 	}
 
-	if err := os.RemoveAll(tmpDir); err != nil {
+	if err := os.RemoveAll(fstorePath); err != nil {
 		return fmt.Errorf("cleaning up temporary files: %w", err)
 	}
 
