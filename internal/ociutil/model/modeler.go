@@ -22,37 +22,40 @@ import (
 	"oras.land/oras-go/v2/errdef"
 )
 
-var ErrUnsupportedReferenceType = errors.New("unsupported reference type")
-var ErrReferenceNotFound = errors.New("reference not found in remote data model")
+var (
+	ErrUnsupportedReferenceType = errors.New("unsupported reference type")
+	ErrReferenceNotFound        = errors.New("reference not found in remote data model")
+)
 
 // Modeler allows for fetching, updating, and pushing a Git OCI data model to
 // an OCI registry.
 // TODO: Is this interface overloaded?
 type Modeler interface {
 	// Fetch pulls Git OCI metadata from a remote. It does not pull layers.
-	Fetch(ctx context.Context, ref string) error
+	Fetch(ctx context.Context, ociRemote string) error
 	// FetchOrDefault extends Fetch to initialize an empty OCI manifest and config
 	// if the remote ref does not exist.
-	FetchOrDefault(ctx context.Context, ref string) error
+	FetchOrDefault(ctx context.Context, ociRemote string) error
 	// Push uploads the Git OCI data model in its current state.
-	Push(ctx context.Context, ref string) (ocispec.Descriptor, error)
+	Push(ctx context.Context, ociRemote string) (ocispec.Descriptor, error)
 	// AddPack adds a packfile as a layer to the Git OCI data model. refs are the
 	// updated remote references.
 	AddPack(ctx context.Context, path string, refs ...*plumbing.Reference) (ocispec.Descriptor, error)
 	// UpdateRef updates a Git reference and the object it points to in the
 	// Git OCI data model. Useful for updating a reference where its object
 	// is within a packfile that already exists in the remote OCI registry.
-	UpdateRef(ctx context.Context, gitRef *plumbing.Reference, ociLayer digest.Digest) error
+	UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error
 	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
 	// the ref does not exist or if not supported (head or tag ref).
-	ResolveRef(ctx context.Context, ref plumbing.ReferenceName) (*plumbing.Reference, error)
+	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, error)
 	// DeleteRef removes a reference from the remote. The commit remains.
-	DeleteRef(ctx context.Context, ref plumbing.ReferenceName) error
+	DeleteRef(ctx context.Context, refName plumbing.ReferenceName) error
 	// HeadRefs returns the existing head references.
 	HeadRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
 	// TagRefs returns the existing tag references.
 	TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
-	// CommitExists uses a local repository to resolve the best known OCI layer containing the
+	// CommitExists uses a local repository to resolve the best known OCI layer containing the commit.
+	// a nil error with an empty layer indicates a commit does not exist.
 	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
 
 	// TODO: LFS Support
@@ -79,8 +82,11 @@ type model struct {
 	fstore     *file.Store
 	fstorePath string
 
-	man      ocispec.Manifest
-	cfg      oci.ConfigGit
+	// populated on fetch
+	man         ocispec.Manifest
+	cfg         oci.ConfigGit
+	refsByLayer map[digest.Digest][]plumbing.Hash
+
 	newPacks []ocispec.Descriptor
 }
 
@@ -116,6 +122,8 @@ func (m *model) Fetch(ctx context.Context, ociRemote string) error {
 		return fmt.Errorf("decoding config: %w", err)
 	}
 
+	m.sortRefsByLayer()
+
 	return nil
 }
 
@@ -133,6 +141,7 @@ func (m *model) FetchOrDefault(ctx context.Context, ociRemote string) error {
 			ArtifactType: oci.ArtifactTypeGitManifest,
 			// annotations set on push
 		}
+		m.refsByLayer = map[digest.Digest][]plumbing.Hash{}
 		return nil
 	case err != nil:
 		return fmt.Errorf("fetching remote metadata: %w", err)
@@ -254,13 +263,10 @@ func (m *model) DeleteRef(ctx context.Context, refName plumbing.ReferenceName) e
 }
 
 func (m *model) CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error) {
-	// TODO: rebuilding this map each time is inefficient
-	resolver := m.sortRefsByLayer()
-
 	// most efficient with a relatively new base layer containing few refs
 	// TODO: room for optimization?
 	for _, layer := range m.man.Layers {
-		for _, c := range resolver[layer.Digest] {
+		for _, c := range m.refsByLayer[layer.Digest] {
 			existingCommit, err := localRepo.CommitObject(c)
 			if err != nil {
 				return "", fmt.Errorf("resolving commit object for remote head commit %s: %w", c.String(), err)
@@ -280,17 +286,15 @@ func (m *model) CommitExists(localRepo *git.Repository, commit *object.Commit) (
 }
 
 // sortRefsByLayer organizes the refs in the current config by layer,
-// returning a map of layer digests to a slice of commit hashes contained in that layer.
-func (m *model) sortRefsByLayer() map[digest.Digest][]plumbing.Hash {
-	layerResolver := make(map[digest.Digest][]plumbing.Hash) // layer digest : []commits
+// updating model with a map of layer digests to a slice of commit hashes contained in that layer.
+func (m *model) sortRefsByLayer() {
+	m.refsByLayer = make(map[digest.Digest][]plumbing.Hash) // layer digest : []commits
 	for _, info := range m.cfg.Heads {
-		layerResolver[info.Layer] = append(layerResolver[info.Layer], plumbing.NewHash(info.Commit))
+		m.refsByLayer[info.Layer] = append(m.refsByLayer[info.Layer], plumbing.NewHash(info.Commit))
 	}
 	for _, info := range m.cfg.Tags {
-		layerResolver[info.Layer] = append(layerResolver[info.Layer], plumbing.NewHash(info.Commit))
+		m.refsByLayer[info.Layer] = append(m.refsByLayer[info.Layer], plumbing.NewHash(info.Commit))
 	}
-
-	return layerResolver
 }
 
 // TODO: these listing functions may be problematic if the remote has not yet been fetched.
