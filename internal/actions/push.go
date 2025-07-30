@@ -45,6 +45,129 @@ const (
 
 // }
 
+type refComparer interface {
+	// Compare resolves the status of a remote reference.
+	Compare(ctx context.Context, force bool, localName plumbing.ReferenceName, remoteName plumbing.ReferenceName) (refPair, error)
+	// GetStatus returns the status of a remote reference.
+	// GetStatus(remoteName plumbing.ReferenceName) (status, bool)
+}
+
+// refCompare implementes refComparer.
+type refCompare struct {
+	local  *git.Repository
+	remote model.Modeler
+
+	refs map[plumbing.ReferenceName]refPair // key is remote ref name
+}
+
+type refPair struct {
+	local  *plumbing.Reference
+	remote *plumbing.Reference
+	status
+	layer digest.Digest // only populated if (status ^ statusAddCommit)
+}
+
+func newRefComparer(local *git.Repository, remote model.Modeler) refComparer {
+	return &refCompare{
+		local:  local,
+		remote: remote,
+		refs:   make(map[plumbing.ReferenceName]refPair, 0),
+	}
+}
+
+func (rc *refCompare) Compare(ctx context.Context, force bool, localName, remoteName plumbing.ReferenceName) (refPair, error) {
+	rp, ok := rc.refs[remoteName]
+	if ok {
+		return rp, nil
+	}
+
+	localRef, err := rc.local.Reference(localName, true)
+	if err != nil {
+		return refPair{}, fmt.Errorf("resolving hash of local reference %s: %w", localName.String(), err)
+	}
+	slog.InfoContext(ctx, "resolved local reference", "ref", localName.String(), "hash", localRef.Hash().String())
+
+	remoteRef, err := rc.remote.ResolveRef(ctx, remoteName)
+	switch {
+	case errors.Is(err, model.ErrReferenceNotFound):
+		remoteRef = plumbing.NewHashReference(remoteName, plumbing.ZeroHash) // hash irrelavent, later we use the local hash
+	case err != nil:
+		// model.ErrUnsupportedReferenceType, and other errs, are propagated
+		return refPair{}, err
+	default:
+		slog.InfoContext(ctx, "resolved remote reference", "ref", localName.String(), "hash", remoteRef.Hash().String())
+	}
+
+	rp, err = rc.compare(force, localRef, remoteRef)
+	if err != nil {
+		return refPair{}, fmt.Errorf("comparing local and remote refs: %w", err)
+	}
+	rc.refs[remoteName] = rp
+
+	return rp, nil
+}
+
+// func (rc *refCompare) GetStatus(remoteName plumbing.ReferenceName) (status, bool) {
+// 	fp, ok := rc.refs[remoteName]
+// 	if !ok {
+// 		return 0, false
+// 	}
+// 	return fp.status, true
+// }
+
+func (rc *refCompare) compare(force bool, localRef, remoteRef *plumbing.Reference) (refPair, error) {
+	rp := refPair{
+		local:  localRef,
+		remote: remoteRef,
+		status: statusUpdateRef,
+	}
+
+	if force {
+		rp.status = rp.status | statusForce
+	}
+
+	// empty local indicates ref deletion
+	if localRef == nil {
+		rp.status = rp.status | statusDelete
+	} else {
+		localCommit, err := rc.local.CommitObject(localRef.Hash())
+		if err != nil {
+			return refPair{}, fmt.Errorf("resolving commit object from hash for local ref: %w", err)
+		}
+
+		layer, err := rc.remote.CommitExists(rc.local, localCommit)
+		if err != nil {
+			return refPair{}, fmt.Errorf("resolving existance of commit %s in remote: %w", localCommit, err)
+		}
+		if layer.String() != "" {
+			rp.layer = layer
+		} else {
+			rp.status = rp.status | statusAddCommit
+		}
+
+		if remoteRef.Hash().IsZero() {
+			rp.status = rp.status | statusUpdateRef
+		} else {
+			remoteCommit, err := rc.local.CommitObject(remoteRef.Hash())
+			if err != nil {
+				return refPair{}, fmt.Errorf("resolving commit object from hash for remote ref: %w", err)
+			}
+
+			isAncestor, err := remoteCommit.IsAncestor(localCommit)
+			if err != nil {
+				return refPair{}, fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
+			}
+			if isAncestor {
+				rp.status = rp.status | statusUpdateRef
+			} else if !force {
+				return refPair{}, fmt.Errorf("remote reference %s update is not a fast forward of local ref %s", remoteRef.Name().String(), localRef.Name().String())
+			}
+		}
+	}
+
+	return rp, nil
+}
+
 // push handles the `push` command.
 func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
@@ -60,66 +183,52 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	// use pkg dotgit rather than git so we have access to manage packfiles
 	// repo2 := dotgit.New(osfs.New(action.gitDir))
 
+	rc := newRefComparer(action.localRepo, action.remote)
+
 	// resolve state of refs in remote
-	newCommits := make([]plumbing.Hash, 0)
+	newCommits := make([]plumbing.Hash, 0)          // TODO: not used properly yet, but will be when thin packs are handled properly
 	refsInNewPack := make([]*plumbing.Reference, 0) // len <= newCommites
 	for _, c := range cmds {
 		// TODO: split this monstrosity
-		l, r, err := parseRefPair(c)
+		l, r, force, err := parseRefPair(c)
 		if err != nil {
 			return fmt.Errorf("parsing push command: %w", err)
 		}
 
-		localRef, err := action.localRepo.Reference(l, true)
-		if err != nil {
-			return fmt.Errorf("resolving hash of local reference %s: %w", l.String(), err)
-		}
-		slog.InfoContext(ctx, "resolved local reference", "ref", l.String(), "hash", localRef.Hash().String())
-
-		remoteRef, err := action.remote.ResolveRef(ctx, r)
-		switch {
-		case errors.Is(err, model.ErrReferenceNotFound):
-			remoteRef = plumbing.NewHashReference(r, plumbing.ZeroHash) // hash irrelavent, later we use the local hash
-		case errors.Is(err, model.ErrUnsupportedReferenceType):
-			slog.WarnContext(ctx, "encountered unsupported reference type when resolving remote reference", "ref", r.String())
+		rp, err := rc.Compare(ctx, force, l, r)
+		if errors.Is(err, model.ErrUnsupportedReferenceType) {
+			slog.WarnContext(ctx, "encountered unsupported reference type when resolving remote reference", "err", err.Error())
 			continue
-		case err != nil:
-			return err
-		default:
-			slog.InfoContext(ctx, "resolved remote reference", "ref", l.String(), "hash", remoteRef.Hash().String())
 		}
-
-		// update metadata as needed
-		refStatus, layer, err := action.compareRefs(localRef, remoteRef)
 		if err != nil {
-			return fmt.Errorf("comparing local ref %sand remote ref %s: %w", localRef.Name().String(), remoteRef.Name().String(), err)
+			return fmt.Errorf("comparing local ref %s to remote ref %s: %w", l.String(), r.String(), err)
 		}
 
 		switch {
-		case (refStatus & statusDelete) == statusDelete:
-			err := action.remote.DeleteRef(ctx, remoteRef.Name())
+		case (rp.status & statusDelete) == statusDelete:
+			err := action.remote.DeleteRef(ctx, r)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
-				slog.WarnContext(ctx, "encountered unsupported reference type when deleting remote reference", "ref", remoteRef.Name().String())
+				slog.WarnContext(ctx, "encountered unsupported reference type when deleting remote reference", "ref", r.String())
 				continue
 			}
 			if err != nil {
 				return err
 			}
-		case (refStatus & statusForce) == statusForce:
+		case (rp.status & statusForce) == statusForce:
 			fallthrough
-		case (refStatus & statusAddCommit) == statusAddCommit:
-			newCommits = append(newCommits, localRef.Hash())
-			if layer == "" {
-				// defer the ref update until we know which the packfile layer digest
-				refsInNewPack = append(refsInNewPack, plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()))
+		case (rp.status & statusAddCommit) == statusAddCommit:
+			newCommits = append(newCommits, rp.local.Hash())
+			if rp.layer == "" {
+				// defer the ref update until we know the packfile layer digest
+				refsInNewPack = append(refsInNewPack, plumbing.NewHashReference(rp.remote.Name(), rp.local.Hash()))
 				continue
 			}
 			fallthrough
-		case (refStatus & statusUpdateRef) == statusUpdateRef:
+		case (rp.status & statusUpdateRef) == statusUpdateRef:
 			// update remote ref's commit to local ref's
-			err := action.remote.UpdateRef(ctx, plumbing.NewHashReference(remoteRef.Name(), localRef.Hash()), layer)
+			err := action.remote.UpdateRef(ctx, plumbing.NewHashReference(rp.remote.Name(), rp.local.Hash()), rp.layer)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
-				slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", remoteRef.Name().String())
+				slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", rp.remote.Name().String())
 				continue
 			}
 			if err != nil {
@@ -150,23 +259,10 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	}
 	// idxPath := path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.idx", packHash.String()))
 
-	packDesc, err := action.remote.AddPack(ctx, packPath, refsInNewPack...)
+	_, err = action.remote.AddPack(ctx, packPath, refsInNewPack...)
 	// TODO: we're silently ignoring this error
 	if err != nil && !errors.Is(err, model.ErrUnsupportedReferenceType) {
 		return fmt.Errorf("adding packfile to OCI data model: %w", err)
-	}
-
-	// update deferred ref updates
-	// TODO:
-	for _, ref := range refsInNewPack {
-		err := action.remote.UpdateRef(ctx, ref, packDesc.Digest)
-		if errors.Is(err, model.ErrUnsupportedReferenceType) {
-			slog.WarnContext(ctx, "encountered unsupported reference type when updating remote reference", "ref", ref.Name().String())
-			continue
-		}
-		if err != nil {
-			return err
-		}
 	}
 
 	desc, err := action.remote.Push(ctx, action.addess)
@@ -176,58 +272,6 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	slog.InfoContext(ctx, "successfully pushed to remote", "address", action.addess, "digest", desc.Digest, "size", desc.Size)
 
 	return nil
-}
-
-// compareRefs resolves what's needed for a remoteRef to be updated to localRef.
-// TODO: compareRefs is intended for resolving the min set of hashes needed for a thin packfile.
-func (action *GitOCI) compareRefs(localRef, remoteRef *plumbing.Reference) (status, digest.Digest, error) {
-	// TODO: this implementation attempts to resolve as much information about a ref comparison
-	// as possible, but this is likely overkill. It may be better to short-circuit, e.g. if force
-	// we don't care to resolve ancestral status of the remote & local refs.
-	var s status
-
-	// if local is empty, status += delete
-	if localRef == nil {
-		s = s | statusDelete
-	}
-
-	// TODO: uncomment when force is supported
-	// if action.Force {
-	// 	s = s | statusForce
-	// }
-
-	localCommit, err := action.localRepo.CommitObject(localRef.Hash())
-	if err != nil {
-		return s, "", fmt.Errorf("resolving commit object from hash for local ref: %w", err)
-	}
-
-	if !remoteRef.Hash().IsZero() {
-		remoteCommit, err := action.localRepo.CommitObject(remoteRef.Hash())
-		if err != nil {
-			return s, "", fmt.Errorf("resolving commit object from hash for remote ref: %w", err)
-		}
-
-		// TODO: something smells off here...
-		isAncestor, err := remoteCommit.IsAncestor(localCommit)
-		if err != nil {
-			return s, "", fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
-		}
-		if isAncestor {
-			s = s | statusUpdateRef
-		}
-	} else {
-		s = s | statusUpdateRef
-	}
-
-	layer, err := action.remote.CommitExists(action.localRepo, localCommit)
-	if err != nil {
-		return s, "", fmt.Errorf("resolving existance of commit %s in remote: %w", localCommit, err)
-	}
-	if layer == "" {
-		s = s | statusAddCommit
-	}
-
-	return s, layer, nil
 }
 
 // HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.
@@ -277,20 +321,29 @@ func (action *GitOCI) createPack(hashes []plumbing.Hash) (h plumbing.Hash, err e
 }
 
 // parseRefPair validates a reference pair, <local>:<remote>, returning the local and remote references respectively.
-func parseRefPair(c cmd.Git) (plumbing.ReferenceName, plumbing.ReferenceName, error) {
+// The returned boolean indicates a force update should be performed..
+func parseRefPair(c cmd.Git) (plumbing.ReferenceName, plumbing.ReferenceName, bool, error) {
 	if c.Data == nil {
-		return "", "", fmt.Errorf("no arguments in push command")
+		return "", "", false, fmt.Errorf("no arguments in push command")
 	}
 
 	pair := c.Data[0]
 	if pair == "" {
-		return "", "", errors.New("empty reference pair string, expected <local>:<remote>")
+		return "", "", false, errors.New("empty reference pair string, expected <local>:<remote>")
 	}
 
 	s := strings.Split(pair, ":")
 	if len(s) != 2 {
-		return "", "", fmt.Errorf("failed to split reference pair string, got %s, expected <local>:<remote>", pair)
+		return "", "", false, fmt.Errorf("failed to split reference pair string, got %s, expected <local>:<remote>", pair)
+	}
+	local := s[0]
+	remote := s[1]
+
+	var force bool
+	if strings.HasPrefix(local, "+") {
+		force = true
+		local = strings.TrimPrefix(local, "+")
 	}
 
-	return plumbing.ReferenceName(s[0]), plumbing.ReferenceName(s[1]), nil
+	return plumbing.ReferenceName(local), plumbing.ReferenceName(remote), force, nil
 }
