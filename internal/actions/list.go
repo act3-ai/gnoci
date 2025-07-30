@@ -42,6 +42,7 @@ func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference
 	// not necessarily an error, this could be a clone
 	headRef, err := localRepo.Head()
 	if err != nil {
+		// TODO: can we assume main/master if local HEAD DNE?
 		slog.InfoContext(ctx, "local HEAD not found")
 	} else {
 		slog.InfoContext(ctx, "head ref", "target", headRef.Hash().String(), "name", headRef.Name().String())
@@ -63,14 +64,14 @@ func (action *GitOCI) listRefs(ctx context.Context, headRef *plumbing.Reference)
 			}
 		}
 
-		s := fmt.Sprintf("%s refs/heads/%s", v.Commit, k)
+		s := fmt.Sprintf("%s %s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
 		}
 	}
 
 	for k, v := range action.remote.TagRefs() {
-		s := fmt.Sprintf("%s refs/tags/%s", v.Commit, k)
+		s := fmt.Sprintf("%s %s", v.Commit, k)
 		if err := action.batcher.Write(ctx, s); err != nil {
 			return fmt.Errorf("writing ref to Git: %w", err)
 		}

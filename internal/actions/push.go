@@ -25,12 +25,6 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 		return fmt.Errorf("fetching remote metadta: %w", err)
 	}
 
-	var err error
-	action.localRepo, err = git.PlainOpen(action.gitDir)
-	if err != nil {
-		return fmt.Errorf("opening local repository: %w", err)
-	}
-
 	// use pkg dotgit rather than git so we have access to manage packfiles
 	// repo2 := dotgit.New(osfs.New(action.gitDir))
 

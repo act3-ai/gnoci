@@ -26,7 +26,7 @@ const (
 	List         Type = "list"
 	ListForPush  Type = "for-push"
 	Push         Type = "push"
-	// Fetch                = "fetch"
+	Fetch        Type = "fetch"
 
 	// not a Git convention
 	Empty Type = "empty" // marks empty line - a separator
@@ -39,6 +39,7 @@ var Commands = []Type{
 	Empty,
 	List,
 	Push,
+	Fetch,
 }
 
 // https://git-scm.com/docs/gitremote-helpers#_options
@@ -112,6 +113,14 @@ func parse(ctx context.Context, line string) (Git, error) {
 		}
 		return Git{
 			Cmd:  Push,
+			Data: fields[1:],
+		}, nil
+	case Fetch:
+		if len(fields) < 2 {
+			return Git{}, fmt.Errorf("insufficient args for fetch command")
+		}
+		return Git{
+			Cmd:  Fetch,
 			Data: fields[1:],
 		}, nil
 	default:

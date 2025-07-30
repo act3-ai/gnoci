@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"path/filepath"
 
@@ -36,6 +37,8 @@ type Modeler interface {
 	// FetchOrDefault extends Fetch to initialize an empty OCI manifest and config
 	// if the remote ref does not exist.
 	FetchOrDefault(ctx context.Context, ociRemote string) error
+	// FetchLayer fetches a packfile layer from OCI identifies by digest.
+	FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
 	// Push uploads the Git OCI data model in its current state.
 	Push(ctx context.Context, ociRemote string) (ocispec.Descriptor, error)
 	// AddPack adds a packfile as a layer to the Git OCI data model. refs are the
@@ -47,7 +50,7 @@ type Modeler interface {
 	UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error
 	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
 	// the ref does not exist or if not supported (head or tag ref).
-	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, error)
+	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, digest.Digest, error)
 	// DeleteRef removes a reference from the remote. The commit remains.
 	DeleteRef(ctx context.Context, refName plumbing.ReferenceName) error
 	// HeadRefs returns the existing head references.
@@ -155,6 +158,19 @@ func (m *model) FetchOrDefault(ctx context.Context, ociRemote string) error {
 	}
 }
 
+func (m *model) FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+	for _, desc := range m.man.Layers {
+		if desc.Digest == dgst {
+			rc, err := m.gt.Fetch(ctx, desc)
+			if err != nil {
+				return nil, fmt.Errorf("fetching layer: %w", err)
+			}
+			return rc, nil
+		}
+	}
+	return nil, fmt.Errorf("layer not found for digest %s", dgst.String())
+}
+
 func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error) {
 	// TODO: Perhaps we could make this more efficient, ONLY in the case where
 	// multiple packfiles are added, if we make a custom oras.CopyGraphOptions to
@@ -233,7 +249,7 @@ func (m *model) UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer
 	}
 }
 
-func (m *model) ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, error) {
+func (m *model) ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, digest.Digest, error) {
 	// TODO: go-git supports note references, we could too
 	var ok bool
 	var rInfo oci.ReferenceInfo
@@ -243,13 +259,13 @@ func (m *model) ResolveRef(ctx context.Context, refName plumbing.ReferenceName) 
 	case refName.IsTag():
 		rInfo, ok = m.cfg.Tags[refName]
 	default:
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, refName.String())
+		return nil, "", fmt.Errorf("%w: %s", ErrUnsupportedReferenceType, refName.String())
 	}
 
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrReferenceNotFound, refName.String())
+		return nil, "", fmt.Errorf("%w: %s", ErrReferenceNotFound, refName.String())
 	}
-	return plumbing.NewHashReference(refName, plumbing.NewHash(rInfo.Commit)), nil
+	return plumbing.NewHashReference(refName, plumbing.NewHash(rInfo.Commit)), rInfo.Layer, nil
 }
 
 func (m *model) DeleteRef(ctx context.Context, refName plumbing.ReferenceName) error {

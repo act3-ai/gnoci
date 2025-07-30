@@ -79,7 +79,7 @@ func (rc *refCompare) Compare(ctx context.Context, force bool, localName, remote
 	}
 	slog.InfoContext(ctx, "resolved local reference", "ref", localName.String(), "hash", localRef.Hash().String())
 
-	remoteRef, err := rc.remote.ResolveRef(ctx, remoteName)
+	remoteRef, _, err := rc.remote.ResolveRef(ctx, remoteName)
 	switch {
 	case errors.Is(err, model.ErrReferenceNotFound):
 		remoteRef = plumbing.NewHashReference(remoteName, plumbing.ZeroHash) // hash irrelavent, later we use the local hash
