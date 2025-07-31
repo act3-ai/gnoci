@@ -2,33 +2,35 @@
 
 ## Purpose
 
-<!-- In this section, we tell the user what to expect in the quick start documentation for this product/process.
-
-This should be a 1-2 sentence summary of the documentation. The first sentence is provided below. Add additional content if needed. -->
-
 This Quick Start Guide is for users who have already [installed Git Remote Helper for OCI Registries](installation-guide.md) and who are ready to take advantage of its features.
 
-You will be guided through the steps necessary to begin using Git Remote Helper for OCI Registries
-<!-- Include a Table of Contents that links to steps below if possible -->
+You will be guided through the steps necessary to begin using `git-remote-oci`.
 
 1. [Configuration](#configuration)
 2. [Initial Usage](#initial-usage)
 
 ## Configuration
 
-<!-- This section will begin with a summary of the overall initial configuration process or set up steps a user must complete to begin interacting with the product.-->
-
-<!-- ### First sub-section
-
-This sub-section should be clearly labeled and describe the first step in the configuration or set up process that must be completed.
-
-### Additional sub-section(s)
-
-Add as many sub-sections as needed.-->
+*Coming soon...*
 
 ## Initial Usage
 
-<!-- Provide enough information in this section that a new "cold" user could begin using the product. Refrain from providing a deep dive into features, concepts, and other in-depth content that will be in the User Guide.-->
+`git-remote-oci` is intended to be used as a [git remote helper](https://git-scm.com/docs/gitremote-helpers), it is rare a user interacts with it directly. Instead, users configure `git` to use the `oci` protocol and interact with `git` as normal.
+
+To use `git` with an OCI registry, whenever a `git` command allows a remote URL as an option specify the Git remote with a `oci` protocol prefix along with an OCI tag reference, e.g. `oci://<registry>/<repository>/<name>:<tag>`.
+
+See [usage examples](./user-guide.md#usage).
+
+### Recommended Usage
+
+It is recommended to configure an OCI registry tag reference as a Git remote:
+
+```console
+$ cd path/to/local/repo
+$ git remote add <name> oci://<registry>/<repository>/<name>:tag
+```
+
+Whenever `git` requires or allows a remote option, simply use `<name>`, e.g. `git push <name>`
 
 ## Additional Resources
 
