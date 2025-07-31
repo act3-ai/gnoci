@@ -117,13 +117,13 @@ By using packfiles, the data model reduces OCI storage space and data transfer b
 
 See [limitations of packfiles](#usage-of-packfiles).
 
-## Git Artifact Creation and Updates
+### Git Artifact Creation and Updates
 
-### Initial Git Artifact
+#### Initial Git Artifact
 
 When pushing the Git OCI artifact to a remote OCI registry for the first time, i.e. the [OCI tag reference](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#checking-if-content-exists-in-the-registry) does not exist, a [packfile](https://git-scm.com/docs/pack-format) is created containing all git objects reachable from the references pushed. In effect, the packfile contains the complete git history for each reference. This packfile serves as the base layer for subsequent updates. Additionally, each tag or head reference pushed is added to the artifact config alongside the digest of the packfile layer created.
 
-### Subsequent Git Updates
+#### Subsequent Git Updates
 
 If a Git OCI artifact reference already exists, `git-remote-oci` creates a single ["thin" pack](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin) containing reachable objects not included in any existing packfile layers. Any reference updates are reflected in the OCI config.
 
@@ -139,6 +139,11 @@ The LFS OCI manifest defines two custom types:
 - `application/vnd.ai.act3.git-lfs.object.v1` - Layer `mediaType`
 
 The data model does not require a configuration, instead the `config` descriptor is set to the empty descriptor.
+
+The same annotations as the [Git artifact manifest](#git-artifact-manifest) are defined:
+
+- `vnd.ai.act3.git-remote-oci.version` - The version of the `git-remote-oci` remote helper that created the artifact.
+- `org.opencontainers.image.created` - Set to `1970-01-01T00:00:00Z`
 
 #### Example LFS Manifest
 
@@ -186,7 +191,6 @@ The data model does not require a configuration, instead the `config` descriptor
     "vnd.ai.act3.git-remote-oci.version": "v0.0.0-alpha"
   }
 }
-
 ```
 
 ### LFS Artifact Config
@@ -197,15 +201,15 @@ The data model does not require a configuration, instead the `config` descriptor
 
 LFS artifact layers are identified by the `application/vnd.ai.act3.git-lfs.object.v1` `mediaType`. Each layer contains the contents of a single `git-lfs` tracked file, fetched on-demand when a `git-lfs` pointer file needs to be resolved to the full file contents.
 
-## LFS Artifact Creation and Updates
+### LFS Artifact Creation and Updates
 
 An LFS artifact is only created if a local repository has `git-lfs` configured.
 
-### Initial LFS Artifact
+#### Initial LFS Artifact
 
 The initial LFS artifact is created the first time a `git` commit object contains one or more `git-lfs` tracked files. The manifest contains a single layer for each LFS file.
 
-### Subsequent LFS Updates
+#### Subsequent LFS Updates
 
 If an LFS artifact already exists, additional LFS files are appended to the LFS manifest layers.
 
