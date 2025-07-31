@@ -1,28 +1,29 @@
 # Git Remote Helper for OCI Registries
 
-Git Remote Helper for OCI Registries is designed to:
+`git-remote-oci` is a Git remote helper that implements a custom protocol for interacting with Git repositories stored in OCI compliant registries. It is designed to allow users to interact with `git` as they normally do in their day-to-day workflows, but use an OCI registry as remote storage.
 
-- <!--replace this with purpose 1-->
-- <!--replace this with purpose 2-->
-- <!--replace this with purpose 3 or delete, and so on-->
+`git-remote-oci` supports:
 
-Git Remote Helper for OCI Registries has features such as:
+- Cloning
+- Fetching/Pulling
+- Pushing
+- Evaluating remote references
 
-- <!--replace this with feature 1-->
-- <!--replace this with feature 2-->
-- <!--replace this with feature 3 or delete, and so on-->
+## Purpose
+
+Why use OCI registries as remote storage for Git repositories?
+
+Existing tools, such as [Zarf](https://zarf.dev/) and the [ASCE Data Tool](https://github.com/act3-ai/data-tool), provide solutions for moving OCI images and artifacts across air-gapped environments. The primary use-case for the `oci` remote helper protocol is to efficiently transfer and store Git repositories in OCI registries to complement the air-gap capabilities of these tools.
+
+For more information see the [project proposal](./docs/proposal/proposal.md).
 
 ## Documentation
 
-The documentation for Git Remote Helper for OCI Registries is organized as follows:
+The documentation for `git-remote-oci` is organized as follows:
 
-- **[Quick Start Guide](docs/quick-start-guide.md)**: provides documentation of prerequisites, downloading, installing, and configuring Git Remote Helper for OCI Registries.
-<!--Modify the description above, as needed, based on the product and what sections are actually in the doc -->
-- **[User Guide](docs/user-guide.md)**: provides a conceptual overview of Git Remote Helper for OCI Registries by explaining key concepts. This doc also helps users understand the benefits, usage, and best practices for working with Git Remote Helper for OCI Registries.
-- **[CLI Documentation](docs/cli/git-remote-oci.md)**: documentation of each Git Remote Helper for OCI Registries command in the CLI.
-<!-- If the product does not have CLI documentation, delete this bullet point. If the product has CLI documentation, add a link. -->
-- **[API Reference](docs/apis/gitoci.act3-ai.io/v1alpha1.md)**: documentation of the configuration API
-<!-- If the product does not have API reference documentation, delete this bullet point. If the product has CLI documentation, add a link. -->
+- **[Quick Start Guide](docs/quick-start-guide.md)**: provides documentation of installing and configuring `git-remote-oci`.
+- **[User Guide](docs/user-guide.md)**: provides usage examples.
+- **[Data Model](docs/design/oci-data-model.md)**: defines the data model used by `git-remote-oci` to store Git repositories in OCI compliant registries.
 
 ## How to Contribute
 
@@ -31,4 +32,3 @@ The documentation for Git Remote Helper for OCI Registries is organized as follo
 ## Support
 
 - **[Troubleshooting FAQ](docs/troubleshooting-faq.md)**: consult list of frequently asked questions and their answers.
-- **Mattermost channel(<!-- replace this with a URL and make link active -->)**: create a post in the Git Remote Helper for OCI Registries channel for assistance.
