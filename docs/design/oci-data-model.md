@@ -226,7 +226,7 @@ flowchart LR
     LFSM_1[LFS Manifest 1a] -.-> |Subject| SyncM_1
     LFSM_1 --> LFSL_1([LFS Layer 1])
 
-    SyncM_1[Git Manifest 1a] --> packfile_1([packfile 1])
+    SyncM_1[Git Manifest 1a] --> packfile_1([packfile 1 - full])
     end
 
     subgraph Second_Sync
@@ -237,9 +237,9 @@ flowchart LR
     LFSM_2_b --> LFSL_2_1
     LFSM_2_b --> LFSL_2_2([LFS Layer 2])
 
-    SyncM_2_a[Git Manifest 1a] --> packfile_2_1([packfile 1])
+    SyncM_2_a[Git Manifest 1a] --> packfile_2_1([packfile 1 - full])
     SyncM_2_b[Git Manifest 1b] --> packfile_2_1
-    SyncM_2_b --> packfile_2_2([packfile 2])
+    SyncM_2_b --> packfile_2_2([packfile 2 - thin])
     end
 
     subgraph Third_Sync
@@ -255,12 +255,12 @@ flowchart LR
     LFSM_3_c --> LFSL_3_2
     LFSM_3_c --> LFSL_3_3([LFS Layer 3])
 
-    SyncM_3_a[Git Manifest 1a] --> packfile_3_1([packfile 1])
+    SyncM_3_a[Git Manifest 1a] --> packfile_3_1([packfile 1 - full])
     SyncM_3_b[Git Manifest 1b] --> packfile_3_1
     SyncM_3_c[Git Manifest 1c] --> packfile_3_1
-    SyncM_3_b --> packfile_3_2([packfile 2])
+    SyncM_3_b --> packfile_3_2([packfile 2 - thin])
     SyncM_3_c --> packfile_3_2
-    SyncM_3_c --> packfile_3_3([packfile 3])
+    SyncM_3_c --> packfile_3_3([packfile 3 - thin])
     end
 
     First_Sync ==> Second_Sync
