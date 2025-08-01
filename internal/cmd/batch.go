@@ -110,9 +110,7 @@ func (b *batcher) ReadBatch(ctx context.Context) ([]Git, error) {
 
 // WriteBatch writes Message(s) to Git, completing the batch with a blank line, and flushing the buffered writes to Git.
 func (b *batcher) WriteBatch(ctx context.Context, lines ...string) error {
-	slog.InfoContext(ctx, "writing batch to git", "lines", len(lines))
 	for _, line := range lines {
-		slog.InfoContext(ctx, "writing line to git", "line", line)
 		if err := b.Write(ctx, line); err != nil {
 			return err
 		}
