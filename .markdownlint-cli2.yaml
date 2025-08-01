@@ -1,6 +1,8 @@
 config:
   default: true
   line-length: false
+  no-hard-tabs: false
+  commands-show-output: false
 
 globs:
   - "**/*.{md,markdown}"

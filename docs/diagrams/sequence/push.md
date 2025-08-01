@@ -1,3 +1,5 @@
+# Git Push Sequence Diagram
+
 ```mermaid
 sequenceDiagram
     title Git Push to OCI Registry

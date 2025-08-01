@@ -5,7 +5,7 @@ This Quick Start Guide is for users who have already [installed Git Remote Helpe
 You will be guided through the steps necessary to begin using `git-remote-oci` as well as example use cases.
 
 1. [Configuration](#configuration)
-2. [Initial Usage](#initial-usage)
+2. [Usage](#usage)
 
 ## Overview
 
@@ -43,7 +43,7 @@ git push <name> HEAD
 
 Whenever a `git` command allows a remote URL as an option specify the Git remote with a `oci` protocol prefix along with an OCI tag reference, e.g. `oci://<registry>/<repository>/<name>:<tag>`.
 
-## Usage
+## Examples
 
 The following examples build off of each other.
 

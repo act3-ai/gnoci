@@ -1,3 +1,5 @@
+# Git Fetch Sequence Diagram
+
 ```mermaid
 sequenceDiagram
     title Git Fetch from OCI Registry (git fetch --all)

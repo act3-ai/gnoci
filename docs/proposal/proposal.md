@@ -42,16 +42,16 @@ Receiving objects: 100% (10920246/10920246), 5.33 GiB | 10.02 MiB/s, done.
 Resolving deltas: 100% (8883947/8883947), done.
 Updating files: 100% (89751/89751), done.
 
-real	11m45.203s
-user	14m9.259s
-sys	1m12.536s
+real   11m45.203s
+user   14m9.259s
+sys    1m12.536s
 ``
 
 With powers of `1024`:
 
 ```console
 $ du -s linux
-7689188	linux
+7689188 linux
 ```
 
 Sources:
@@ -97,7 +97,6 @@ No known existing remote helpers for this application exist.
 ## Proof-of-Concept
 
 A prototype specification and tooling is provided by the [ASCE Data Tool](https://github.com/act3-ai/data-tool/tree/main/internal/git), which has shown promising results. Although it is the closest existing solution, it only solves part of the problem. It is capable of storing git repositories as OCI artifacts, with support for git-lfs files. Like Zarf, it uses git references (tags and branches) or hashes to store a part of or an entire git repository in an OCI registry. However, it does not function as a git remote helper and lacks in some areas of speed and efficiency.
-
 
 ```console
 $ export IMAGE_NAME=torvalids-linux-$(uuidgen)
