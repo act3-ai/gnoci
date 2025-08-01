@@ -91,11 +91,12 @@ func (b *batcher) Read(ctx context.Context) (Git, error) {
 func (b *batcher) ReadBatch(ctx context.Context) ([]Git, error) {
 	result := make([]Git, 0, 2)
 	for b.in.Scan() {
-		line := b.in.Text()
-		if line == "" {
+		txt := b.in.Text()
+		slog.DebugContext(ctx, "read line from Git", "text", txt)
+		if txt == "" {
 			break
 		}
-		cmd, err := parse(ctx, line)
+		cmd, err := parse(ctx, txt)
 		if err != nil {
 			return nil, fmt.Errorf("parsing Git command: %w", err)
 		}
@@ -109,7 +110,9 @@ func (b *batcher) ReadBatch(ctx context.Context) ([]Git, error) {
 
 // WriteBatch writes Message(s) to Git, completing the batch with a blank line, and flushing the buffered writes to Git.
 func (b *batcher) WriteBatch(ctx context.Context, lines ...string) error {
+	slog.InfoContext(ctx, "writing batch to git", "lines", len(lines))
 	for _, line := range lines {
+		slog.InfoContext(ctx, "writing line to git", "line", line)
 		if err := b.Write(ctx, line); err != nil {
 			return err
 		}
