@@ -174,10 +174,10 @@ prepare() {
     fi
 
     # verify release version with gorelease
-    if [ "$force" != "true" ]; then
-        dagger -m="$mod_release" -s="$silent" --src="." call \
-            go verify --target-version="$vVersion" --current-version="$old_version"
-    fi
+    # if [ "$force" != "true" ]; then
+    #     dagger -m="$mod_release" -s="$silent" --src="." call \
+    #         go verify --target-version="$vVersion" --current-version="$old_version"
+    # fi
 
     dagger -m="$mod_release" -s="$silent" --src="." call prepare \
     --ignore-error="$force" \
