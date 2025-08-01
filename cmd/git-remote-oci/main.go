@@ -1,3 +1,4 @@
+// Package main is the main CLI package.
 package main
 
 import (
@@ -15,7 +16,7 @@ import (
 	"github.com/act3-ai/gitoci/cmd/git-remote-oci/cli"
 )
 
-// Retrieves build info
+// getVersionInfo retrieves build info.
 func getVersionInfo() vv.Info {
 	info := vv.Get()
 	if version != "" {
@@ -48,10 +49,10 @@ func main() {
 
 	// The pre run function logs build info and sets the default output writer
 	root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-		slog.SetDefault(logger.FromContext(cmd.Context()))             // Set global slog.Logger
-		slog.Info("Software", slog.String("version", info.Version))    // Log version info
-		slog.Debug("Software details", slog.Any("info", info))         // Log build info
-		termenv.SetDefaultOutput(termenv.NewOutput(cmd.OutOrStdout())) // Set termenv default output
+		slog.SetDefault(logger.FromContext(cmd.Context()))                                // Set global slog.Logger
+		slog.InfoContext(cmd.Context(), "Software", slog.String("version", info.Version)) // Log version info
+		slog.DebugContext(cmd.Context(), "Software details", slog.Any("info", info))      // Log build info
+		termenv.SetDefaultOutput(termenv.NewOutput(cmd.OutOrStdout()))                    // Set termenv default output
 
 		if persistentPreRun != nil {
 			persistentPreRun(cmd, args)

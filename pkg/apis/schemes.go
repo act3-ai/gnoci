@@ -1,3 +1,4 @@
+// Package apis defines api schemas.
 package apis
 
 import (
@@ -7,7 +8,7 @@ import (
 	"github.com/act3-ai/gitoci/pkg/apis/gitoci.act3-ai.io/v1alpha1"
 )
 
-// NewScheme creates the "scheme" for the API
+// NewScheme creates the "scheme" for the API.
 func NewScheme() *runtime.Scheme {
 	// schemeBuilder is used to add go types to the GroupVersionKind scheme
 	schemeBuilder := runtime.NewSchemeBuilder(

@@ -14,7 +14,6 @@ import (
 	"github.com/act3-ai/gitoci/internal/ociutil/model"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
@@ -93,6 +92,7 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 		}
 		results = append(results, fmtResult(true, r, ""))
 	}
+	slog.DebugContext(ctx, "resolved new commits", "newCommits", newCommits)
 
 	// TODO: resolve common ancestors for thin pack
 
@@ -135,9 +135,8 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 func fmtResult(ok bool, dst plumbing.ReferenceName, why string) string {
 	if ok {
 		return fmt.Sprintf("ok %s", dst.String())
-	} else {
-		return fmt.Sprintf("error %s %s?", dst.String(), why)
 	}
+	return fmt.Sprintf("error %s %s?", dst.String(), why)
 }
 
 // HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.
@@ -155,7 +154,7 @@ func (action *GitOCI) packAll() (h plumbing.Hash, err error) {
 	hs, err := pos.ObjectPacks()
 	switch {
 	case err != nil:
-		return h, err
+		return h, fmt.Errorf("listing local object packs: %w", err)
 
 	case len(hs) != 1:
 		return h, fmt.Errorf("expected 1 packfile, got %d", len(hs))
@@ -166,25 +165,25 @@ func (action *GitOCI) packAll() (h plumbing.Hash, err error) {
 
 // createPack builds a packfile using a set of hashes.
 // TODO: not used
-func (action *GitOCI) createPack(hashes []plumbing.Hash) (h plumbing.Hash, err error) {
-	// reference implementation: https://github.com/go-git/go-git/blob/v5.16.2/repository.go#L1815
-	pfw, ok := action.localRepo.Storer.(storer.PackfileWriter)
-	if !ok {
-		return h, fmt.Errorf("repository storer is not a storer.PackfileWriter")
-	}
-	wc, err := pfw.PackfileWriter()
-	if err != nil {
-		return h, fmt.Errorf("initializing packfile writer: %w", err)
-	}
+// func (action *GitOCI) createPack(hashes []plumbing.Hash) (h plumbing.Hash, err error) {
+// 	// reference implementation: https://github.com/go-git/go-git/blob/v5.16.2/repository.go#L1815
+// 	pfw, ok := action.localRepo.Storer.(storer.PackfileWriter)
+// 	if !ok {
+// 		return h, fmt.Errorf("repository storer is not a storer.PackfileWriter")
+// 	}
+// 	wc, err := pfw.PackfileWriter()
+// 	if err != nil {
+// 		return h, fmt.Errorf("initializing packfile writer: %w", err)
+// 	}
 
-	// TODO: What is a ref delta?
-	enc := packfile.NewEncoder(wc, action.localRepo.Storer, true)
-	h, err = enc.Encode(hashes, 10) // default window
-	if err != nil {
-		return h, fmt.Errorf("encoding packfile: %w", err)
-	}
-	return h, nil
-}
+// 	// TODO: What is a ref delta?
+// 	enc := packfile.NewEncoder(wc, action.localRepo.Storer, true)
+// 	h, err = enc.Encode(hashes, 10) // default window
+// 	if err != nil {
+// 		return h, fmt.Errorf("encoding packfile: %w", err)
+// 	}
+// 	return h, nil
+// }
 
 // parseRefPair validates a reference pair, <local>:<remote>, returning the local and remote references respectively.
 // The returned boolean indicates a force update should be performed..

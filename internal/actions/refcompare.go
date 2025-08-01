@@ -15,17 +15,14 @@ import (
 type status uint8
 
 const (
-	// statusDelete indicates a ref should be removed from the remote
+	// statusDelete indicates a ref should be removed from the remote.
 	statusDelete status = 1 << iota
-	// statusUpdateRef indicates a statusUpdateRef should be updated in the remote
+	// statusUpdateRef indicates a statusUpdateRef should be updated in the remote.
 	statusUpdateRef
-	// statusAddCommit indicates the ref's commit object should be added to the remote
+	// statusAddCommit indicates the ref's commit object should be added to the remote.
 	statusAddCommit
-	// statusForce indicates a statusForce update should be performed
+	// statusForce indicates a statusForce update should be performed.
 	statusForce
-	// rewritten indicates history has been rewritten
-	// TODO: necessary?
-	// rewritten
 )
 
 // func sample(localRepo *git.Repository) error {
@@ -44,7 +41,7 @@ type refComparer interface {
 	// GetStatus(remoteName plumbing.ReferenceName) (status, bool)
 }
 
-// refCompare implementes refComparer.
+// refCompare implements refComparer.
 type refCompare struct {
 	local  *git.Repository
 	remote model.Modeler
@@ -82,10 +79,10 @@ func (rc *refCompare) Compare(ctx context.Context, force bool, localName, remote
 	remoteRef, _, err := rc.remote.ResolveRef(ctx, remoteName)
 	switch {
 	case errors.Is(err, model.ErrReferenceNotFound):
-		remoteRef = plumbing.NewHashReference(remoteName, plumbing.ZeroHash) // hash irrelavent, later we use the local hash
+		remoteRef = plumbing.NewHashReference(remoteName, plumbing.ZeroHash) // hash irrelevant, later we use the local hash
 	case err != nil:
 		// model.ErrUnsupportedReferenceType, and other errs, are propagated
-		return refPair{}, err
+		return refPair{}, fmt.Errorf("resolving remote reference: %w", err)
 	default:
 		slog.InfoContext(ctx, "resolved remote reference", "ref", localName.String(), "hash", remoteRef.Hash().String())
 	}
@@ -107,12 +104,12 @@ func (rc *refCompare) compare(force bool, localRef, remoteRef *plumbing.Referenc
 	}
 
 	if force {
-		rp.status = rp.status | statusForce
+		rp.status |= statusForce
 	}
 
 	// empty local indicates ref deletion
 	if localRef == nil {
-		rp.status = rp.status | statusDelete
+		rp.status |= statusDelete
 	} else {
 		localCommit, err := rc.local.CommitObject(localRef.Hash())
 		if err != nil {
@@ -121,16 +118,16 @@ func (rc *refCompare) compare(force bool, localRef, remoteRef *plumbing.Referenc
 
 		layer, err := rc.remote.CommitExists(rc.local, localCommit)
 		if err != nil {
-			return refPair{}, fmt.Errorf("resolving existance of commit %s in remote: %w", localCommit, err)
+			return refPair{}, fmt.Errorf("resolving existence of commit %s in remote: %w", localCommit, err)
 		}
 		if layer.String() != "" {
 			rp.layer = layer
 		} else {
-			rp.status = rp.status | statusAddCommit
+			rp.status |= statusAddCommit
 		}
 
 		if remoteRef.Hash().IsZero() {
-			rp.status = rp.status | statusUpdateRef
+			rp.status |= statusUpdateRef
 		} else {
 			remoteCommit, err := rc.local.CommitObject(remoteRef.Hash())
 			if err != nil {
@@ -142,7 +139,7 @@ func (rc *refCompare) compare(force bool, localRef, remoteRef *plumbing.Referenc
 				return refPair{}, fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
 			}
 			if isAncestor {
-				rp.status = rp.status | statusUpdateRef
+				rp.status |= statusUpdateRef
 			} else if !force {
 				return refPair{}, fmt.Errorf("remote reference %s update is not a fast forward of local ref %s", remoteRef.Name().String(), localRef.Name().String())
 			}

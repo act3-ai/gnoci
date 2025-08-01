@@ -25,11 +25,7 @@ func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 		}
 	}
 
-	if err := action.listRefs(ctx, headRef); err != nil {
-		return err
-	}
-
-	return nil
+	return action.listRefs(ctx, headRef)
 }
 
 // resolveLocalHead returns the local HEAD, if one exists.

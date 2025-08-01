@@ -1,3 +1,4 @@
+// Package docs provides utilities for embeding documentation.
 package docs
 
 import (
@@ -10,18 +11,22 @@ import (
 	"github.com/act3-ai/go-common/pkg/embedutil"
 )
 
+// GeneralDocumentation is embedded general documentation.
+//
 //go:embed quick-start-guide.md
 //go:embed user-guide.md
 //go:embed troubleshooting-faq.md
 var GeneralDocumentation embed.FS
 
+// APIs is embedded API documentation.
+//
 //go:embed apis/gitoci.act3-ai.io/v1alpha1.md
 var APIs embed.FS
 
 //go:embed apis/schemas/*.schema.json
 var schemas embed.FS
 
-// Schemas returns the JSON Schema definitions
+// Schemas returns the JSON Schema definitions.
 func Schemas() fs.FS {
 	filesys, err := fs.Sub(schemas, "apis/schemas")
 	if err != nil {
@@ -31,8 +36,8 @@ func Schemas() fs.FS {
 	return filesys
 }
 
-// Layout of embedded documentation to surface in the help command
-// and generate in the gendocs command
+// Embedded is a layout of embedded documentation to surface in the help command
+// and generate in the gendocs command.
 func Embedded(root *cobra.Command) *embedutil.Documentation {
 	return &embedutil.Documentation{
 		Title:   "Git Remote Helper for OCI Registries",
@@ -68,7 +73,7 @@ func Embedded(root *cobra.Command) *embedutil.Documentation {
 	}
 }
 
-// Associates the schema file with all config file types
+// SchemaAssociations associates the schema file with all config file types.
 var SchemaAssociations = []cmd.SchemaAssociation{
 	{
 		Definition: "gitoci.act3-ai.io.schema.json",

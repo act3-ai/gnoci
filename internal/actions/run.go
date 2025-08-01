@@ -14,7 +14,7 @@ import (
 	"oras.land/oras-go/v2/content/file"
 )
 
-// GitOCI represents the base action
+// GitOCI represents the base action.
 type GitOCI struct {
 	// TODO: Could be dangerous when storing in struct like this... mutex?
 	batcher cmd.BatchReadWriter
@@ -33,7 +33,7 @@ type GitOCI struct {
 	version string
 }
 
-// NewGitOCI creates a new Tool with default values
+// NewGitOCI creates a new Tool with default values.
 func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version string) *GitOCI {
 	return &GitOCI{
 		batcher: cmd.NewBatcher(in, out),
@@ -44,7 +44,7 @@ func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version 
 	}
 }
 
-// Runs the Hello action
+// Run runs the the primary git-remote-oci action.
 func (action *GitOCI) Run(ctx context.Context) error {
 	// TODO: This is a bit early, but sync.Once seems too much
 	// TODO: The next 5 "sections" are alot of setup that should be condensed

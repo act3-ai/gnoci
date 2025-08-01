@@ -21,8 +21,8 @@ func (action *GitOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 
 	// fetchRefs := make([]*plumbing.Reference, 0, len(cmds))
 	packLayers := make(map[digest.Digest]struct{}, 1)
-	for _, cmd := range cmds {
-		ref, err := parseFetch(cmd)
+	for _, c := range cmds {
+		ref, err := parseFetch(c)
 		if err != nil {
 			return err
 		}
@@ -44,7 +44,7 @@ func (action *GitOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 		if err != nil {
 			return fmt.Errorf("fetching packfile layer: %w", err)
 		}
-		defer rc.Close()
+		defer rc.Close() //nolint:revive
 
 		// TODO: we may want to use packfile.WritePackfileToObjectStorage directly
 		// what's the difference here? writing the objects themselves rather than the
@@ -56,6 +56,9 @@ func (action *GitOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 		slog.DebugContext(ctx, "updating object storage with packfile")
 		if err := packfile.UpdateObjectStorage(st, rc); err != nil {
 			return fmt.Errorf("updating object storage with packfile: %w", err)
+		}
+		if err := rc.Close(); err != nil {
+			return fmt.Errorf("closing packfile reader: %w", err)
 		}
 	}
 	slog.InfoContext(ctx, "done fetching packfiles")

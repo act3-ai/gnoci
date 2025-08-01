@@ -1,3 +1,4 @@
+// Package cli defines CLI commands.
 package cli
 
 import (
@@ -9,7 +10,7 @@ import (
 	"github.com/act3-ai/gitoci/internal/actions"
 )
 
-// NewCLI creates the base git-remote-oci command
+// NewCLI creates the base git-remote-oci command.
 func NewCLI(version string) *cobra.Command {
 	// cmd represents the base command when called without any subcommands
 	cmd := &cobra.Command{

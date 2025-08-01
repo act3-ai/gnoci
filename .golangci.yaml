@@ -7,7 +7,6 @@ linters:
     - containedctx
     - contextcheck
     - copyloopvar
-    - depguard
     - dupl
     - errname
     - errorlint
@@ -105,6 +104,7 @@ linters:
         - fmt\..?(P|p)rint.*\(
       ignore-package-globs:
         - encoding/*
+        - github.com/act3-ai/gitoci/*
   exclusions:
     generated: lax
     presets:

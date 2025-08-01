@@ -21,14 +21,14 @@ type Type string
 
 // https://git-scm.com/docs/gitremote-helpers#_commands
 const (
-	// Git conventions
+	// Git conventions.
 	Capabilities Type = "capabilities"
 	List         Type = "list"
 	ListForPush  Type = "for-push"
 	Push         Type = "push"
 	Fetch        Type = "fetch"
 
-	// not a Git convention
+	// not a Git convention.
 	Empty Type = "empty" // marks empty line - a separator
 	Done  Type = "done"  // marks end of input
 )

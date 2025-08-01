@@ -1,3 +1,4 @@
+// Package oci defines OCI compliant metadata types.
 package oci
 
 import (

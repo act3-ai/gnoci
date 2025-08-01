@@ -24,6 +24,7 @@ type BatchReader interface {
 	ReadBatch(context.Context) ([]Git, error)
 }
 
+// BatchWriter extends Writer to support writing sets of responses to Git.
 type BatchWriter interface {
 	Writer
 

@@ -1,3 +1,4 @@
+// Package ociutil provides utility functions for interacting with OCI registries.
 package ociutil
 
 import (
@@ -27,6 +28,8 @@ import (
 
 // This file is a modification of the contents of https://github.com/act3-ai/data-tool/blob/v1.16.1/internal/registry/registry.go
 
+// NewGraphTarget creates an oras.GraphTarget.
+//
 // TODO: Due to a need to support special use cases, we'll likely need to define a configuration file.
 func NewGraphTarget(ctx context.Context, ref string) (oras.GraphTarget, error) {
 	parsedRef, err := registry.ParseReference(ref)

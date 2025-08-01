@@ -1,3 +1,5 @@
+// Package v1alpha1 defines the v1alpha1 schema.
+//
 // +kubebuilder:object:generate=true
 package v1alpha1
 
@@ -18,14 +20,14 @@ import (
 
 // +kubebuilder:object:root=true
 
-// Configuration type is used to store a user's current configuration settings
+// Configuration type is used to store a user's current configuration settings.
 type Configuration struct {
 	metav1.TypeMeta `json:",inline"`
 
 	ConfigurationSpec `json:",inline"`
 }
 
-// ConfigurationSpec is the actual configuration values
+// ConfigurationSpec is the actual configuration values.
 type ConfigurationSpec struct {
 	// Example description for ExampleOption
 	ExampleOption bool `json:"exampleOption,omitempty"`
@@ -34,7 +36,7 @@ type ConfigurationSpec struct {
 	Name string `json:"name"`
 }
 
-// Default the fields in Configuration.  The argument must be a Configuration
+// ConfigurationDefault the fields in Configuration.  The argument must be a Configuration.
 func ConfigurationDefault(obj *Configuration) {
 	if obj == nil {
 		obj = &Configuration{}
@@ -51,7 +53,7 @@ func ConfigurationDefault(obj *Configuration) {
 	}
 }
 
-// MarshalLog implements the logr.Marshaller interface
+// Redacted implements the logr.Marshaller interface.
 func (c *ConfigurationSpec) Redacted() *ConfigurationSpec {
 	retval := c.DeepCopy()
 
@@ -60,18 +62,18 @@ func (c *ConfigurationSpec) Redacted() *ConfigurationSpec {
 	return retval
 }
 
-// MarshalLog implements the logr.Marshaller interface
+// MarshalLog implements the logr.Marshaller interface.
 func (c *Configuration) MarshalLog() any {
 	// remove TypeMeta so that this retval does not conform to fmt.Stringer interface
 	return c.ConfigurationSpec.MarshalLog()
 }
 
-// MarshalLog implements the logr.Marshaller interface
+// MarshalLog implements the logr.Marshaller interface.
 func (c *ConfigurationSpec) MarshalLog() any {
 	return c.Redacted()
 }
 
-// Write writes the config file in the given folder
+// Write writes the config file in the given folder.
 func (c *Configuration) Write(ctx context.Context, path string) error {
 	yamlContent, err := c.ToDocumentedYAML(ctx)
 	if err != nil {
@@ -144,7 +146,7 @@ func (c Configuration) ToDocumentedYAML(ctx context.Context) ([]byte, error) {
 
 	yamlContent, err := yaml.Marshal(doc)
 	if err != nil {
-		log.Info("could not marshal Configuration", "error", err)
+		log.InfoContext(ctx, "could not marshal Configuration", "error", err)
 		return nil, fmt.Errorf("unable to parse configuration: %w", err)
 	}
 

@@ -10,8 +10,8 @@ import (
 	"github.com/act3-ai/gitoci/internal/cmd"
 )
 
-type Option struct {
-}
+// Option defines a supported option capability.
+type Option struct{}
 
 // option handles and responds to the option subcommands.
 func (action *GitOCI) option(ctx context.Context, c cmd.Git) error {

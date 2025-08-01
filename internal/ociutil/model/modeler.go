@@ -24,8 +24,10 @@ import (
 )
 
 var (
+	// ErrUnsupportedReferenceType indicates a Git reference type is not supported.
 	ErrUnsupportedReferenceType = errors.New("unsupported reference type")
-	ErrReferenceNotFound        = errors.New("reference not found in remote data model")
+	// ErrReferenceNotFound indicates a reference does not exist in the OCI remote.
+	ErrReferenceNotFound = errors.New("reference not found in remote data model")
 )
 
 // Modeler allows for fetching, updating, and pushing a Git OCI data model to
@@ -81,9 +83,8 @@ func NewModeler(fstore *file.Store, gt oras.GraphTarget) Modeler {
 //
 // Note: updates to Git OCI metadata are not concurrency safe.
 type model struct {
-	gt         oras.GraphTarget
-	fstore     *file.Store
-	fstorePath string
+	gt     oras.GraphTarget
+	fstore *file.Store
 
 	// populated on fetch
 	fetched     bool
