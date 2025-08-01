@@ -113,7 +113,7 @@ func (rc *refCompare) compare(force bool, localRef, remoteRef *plumbing.Referenc
 	} else {
 		localCommit, err := rc.local.CommitObject(localRef.Hash())
 		if err != nil {
-			return refPair{}, fmt.Errorf("resolving commit object from hash for local ref: %w", err)
+			return refPair{}, fmt.Errorf("resolving commit object %s from hash for local ref %s: %w", localRef.Hash().String(), localRef.Name().String(), err)
 		}
 
 		layer, err := rc.remote.CommitExists(rc.local, localCommit)
