@@ -53,7 +53,14 @@ Within an existing repository, push to `127.0.0.1:5000/repo/test:example-clone`:
 
 ```console
 $ git push --all oci://127.0.0.1:5000/repo/test:example-clone
-Everything up-to-date
+To oci://127.0.0.1:5000/repo/demo:gitoci8
+ * [new branch]      act3-pt/blueprints/render-orphan -> act3-pt/blueprints/render-orphan
+ * [new branch]      command-fetch -> command-fetch
+ * [new branch]      command-list -> command-list
+ * [new branch]      command-push -> command-push
+ * [new branch]      design-docs -> design-docs
+ * [new branch]      main -> main
+ * [new branch]      setup-project -> setup-project
 ```
 
 Git will not automatically create a new remote:
