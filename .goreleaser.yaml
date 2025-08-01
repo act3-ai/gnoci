@@ -17,7 +17,7 @@ builds:
     env:
       - CGO_ENABLED=0
       - GOFIPS140=latest
-    main: ./cmd/gitoci/
+    main: ./cmd/git-remote-oci/
 
 archives:
   - id: gitoci-archives

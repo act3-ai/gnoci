@@ -236,7 +236,7 @@ publish() {
     with-secret-variable --name="SSH_PRIVATE_KEY" --secret=env:SSH_PRIVATE_KEY \
     with-env-variable --name="RELEASE_LATEST" --value="$release_latest" \
     with-env-variable --name="RELEASE_AUTHOR" --value="$RELEASE_AUTHOR" \
-    with-env-variable --name="RELEASE_AUTHOR_EMAIL" --value="$RELEASE_AUTHOR_EMAIL"
+    with-env-variable --name="RELEASE_AUTHOR_EMAIL" --value="$RELEASE_AUTHOR_EMAIL" \
     release
 
     echo -e "Successfully ran publish stage.\n"
