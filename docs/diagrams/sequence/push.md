@@ -8,15 +8,16 @@ sequenceDiagram
 
     Note over Git, Helper: List capabilities
     Git->>Helper: capabilities
-    Helper-->>Git: option
-    Helper-->>Git: fetch
-    Helper-->>Git: push
+
+    loop for each supported capability
+    Helper-->>Git: <capability>
+    end
 
     Note over Git, Helper: Handle options
-    Git->>Helper: option progress true
+    Git->>Helper: option progress <bool>
     Helper-->>Git: unsupported
 
-    Git->>Helper: option verbosity 1
+    Git->>Helper: option verbosity <int>
     Helper-->>Git: ok
 
     Git->>Helper: list for-push
@@ -24,15 +25,15 @@ sequenceDiagram
     OCI-->>Helper: Response: OCI metdata
 
     loop for each ref in remote
-        Helper->>Helper: resolve remote ref commit
         Helper-->>Git: <commit> refs/{head/tag}/<remote-ref>
     end
     Helper-->>Git: \n (newline, end ref listing)
 
     loop for each push batch
-        loop for each ref to be pushed
-            Git->>Helper: refs/{head/tag}/<local-ref>:<refs>/{head/tag}/<remote-ref>
+        loop for each ref to be pushed (force if "+" prefix)
+            Git->>Helper: push {+}refs/{head/tag}/<local-ref>:<refs>/{head/tag}/<remote-ref>
         end
+        Git->>Helper: \n (newline, end of batch)
     end
 
     Helper->>Helper: Build packfile
