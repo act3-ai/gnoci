@@ -1,6 +1,5 @@
+---
 version: 2
-
-
 
 builds:
   - id: gitoci
@@ -39,8 +38,8 @@ release:
     name: gitoci
   ids:
     - gitoci-archives
-  make_latest: envOrDefault "RELEASE_LATEST" "false" # don't add 'latest' tag by default
-  mode: replace # if there's a need to re-release, don't duplicate the release notes
+  make_latest: envOrDefault "RELEASE_LATEST" "false"  # don't add 'latest' tag by default
+  mode: replace  # if there's a need to re-release, don't duplicate the release notes
   skip_upload: false
 
 checksum:
