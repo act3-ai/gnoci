@@ -238,7 +238,7 @@ publish() {
     with-env-variable --name="RELEASE_AUTHOR" --value="$RELEASE_AUTHOR" \
     with-env-variable --name="RELEASE_AUTHOR_EMAIL" --value="$RELEASE_AUTHOR_EMAIL" \
     release \
-    with-notes --notes "${notes_dir}/${vVersion}" \
+    with-notes --notes "${notes_dir}/${vVersion}.md" \
     run
 
     echo -e "Successfully ran publish stage.\n"
