@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/act3-ai/gitoci/internal/cmd"
 	"github.com/act3-ai/gitoci/internal/ociutil/model"
@@ -35,7 +36,6 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	refsInNewPack := make([]*plumbing.Reference, 0) // len <= newCommites
 	results := make([]string, 0, len(cmds))
 	for _, c := range cmds {
-		// TODO: split this monstrosity
 		l, r, force, err := parseRefPair(c)
 		if err != nil {
 			results = append(results, fmtResult(false, r, fmt.Errorf("parsing push command: %w", err).Error()))
@@ -72,6 +72,7 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 			if rp.layer == "" {
 				// defer the ref update until we know the packfile layer digest
 				refsInNewPack = append(refsInNewPack, plumbing.NewHashReference(rp.remote.Name(), rp.local.Hash()))
+				results = append(results, fmtResult(true, r, ""))
 				continue
 			}
 			// update remote ref's commit to local ref's
@@ -125,6 +126,7 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	if err := action.batcher.WriteBatch(ctx, results...); err != nil {
 		return fmt.Errorf("writing push results to git: %w", err)
 	}
+	time.Sleep(time.Second * 5)
 
 	return nil
 }

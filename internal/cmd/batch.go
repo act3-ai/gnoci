@@ -91,11 +91,12 @@ func (b *batcher) Read(ctx context.Context) (Git, error) {
 func (b *batcher) ReadBatch(ctx context.Context) ([]Git, error) {
 	result := make([]Git, 0, 2)
 	for b.in.Scan() {
-		line := b.in.Text()
-		if line == "" {
+		txt := b.in.Text()
+		slog.DebugContext(ctx, "read line from Git", "text", txt)
+		if txt == "" {
 			break
 		}
-		cmd, err := parse(ctx, line)
+		cmd, err := parse(ctx, txt)
 		if err != nil {
 			return nil, fmt.Errorf("parsing Git command: %w", err)
 		}
