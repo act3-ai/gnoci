@@ -62,16 +62,6 @@ brews:
     description: "A CLI tool for packaging, uploading, and downloading data from OCI registries."
     license: "MIT"
     skip_upload: auto # don't upload if prerelease
-    test: |
-      system "#{bin}/git-remote-oci version"
-    extra_install: |
-      generate_completions_from_executable(bin/"git-remote-oci", "completion")
-
-      # Generate manpages
-      mkdir "man" do
-        system bin/"git-remote-oci", "gendocs", "man", "."
-        man1.install Dir["*.1"]
-      end
     directory: Formula
     repository:
       owner: act3-ai
