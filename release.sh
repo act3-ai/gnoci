@@ -231,7 +231,7 @@ publish() {
 
     vVersion=v$(cat "$version_path")
 
-    dagger -m="$mod_goreleaser" -s="$silent" --src="." call \
+    dagger -m="$mod_goreleaser" -s="$silent" --src="." --version v2.9 call \
     with-secret-variable --name="GITHUB_TOKEN" --secret=env:GITHUB_API_TOKEN \
     with-secret-variable --name="SSH_PRIVATE_KEY" --secret=env:SSH_PRIVATE_KEY \
     with-env-variable --name="RELEASE_LATEST" --value="$release_latest" \
