@@ -237,7 +237,9 @@ publish() {
     with-env-variable --name="RELEASE_LATEST" --value="$release_latest" \
     with-env-variable --name="RELEASE_AUTHOR" --value="$RELEASE_AUTHOR" \
     with-env-variable --name="RELEASE_AUTHOR_EMAIL" --value="$RELEASE_AUTHOR_EMAIL" \
-    release
+    release \
+    with-notes --notes "${notes_dir}/${vVersion}" \
+    run
 
     echo -e "Successfully ran publish stage.\n"
     echo "Release process complete."
