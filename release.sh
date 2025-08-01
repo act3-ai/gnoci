@@ -155,7 +155,7 @@ check_upstream() {
 prepare() {
     echo "Running prepare stage..."
 
-    old_version=v$(cat "$version_path")
+    # old_version=v$(cat "$version_path")
     
     # linters and unit tests
     if [ "$force" != "true" ]; then
