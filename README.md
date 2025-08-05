@@ -1,4 +1,18 @@
-# Git Remote Helper for OCI Registries
+# Git Repositories Stored in OCI Registries
+
+This project has two main objectives:
+
+1. Define a specification for storing Git repositories as OCI artifacts.
+2. Implement a Git remote helper to facilitate conversions of local Git repositories into remote OCI artifacts.
+
+## Git as OCI Specification
+
+A full specification is in progress. Please refer to the prototype [data model](docs/design/oci-data-model.md).
+
+## Git Remote Helper for OCI Registries
+
+> [!WARNING]  
+> `git-remote-oci` is in early stages of development. Bugs are present, and inefficiencies are known to exist.
 
 `git-remote-oci` is a Git remote helper that implements a custom protocol for interacting with Git repositories stored in OCI compliant registries. It is designed to allow users to interact with `git` as they normally do in their day-to-day workflows, but use an OCI registry as remote storage.
 
