@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
@@ -18,7 +17,7 @@ func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 	}
 
 	var headRef *plumbing.Reference
-	if !forPush {
+	if !forPush && action.gitDir != "" {
 		headRef, err = action.resolveLocalHead(ctx)
 		if err != nil {
 			return err
@@ -30,13 +29,13 @@ func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 
 // resolveLocalHead returns the local HEAD, if one exists.
 func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference, error) {
-	localRepo, err := git.PlainOpen(action.gitDir)
+	repo, err := action.localRepo()
 	if err != nil {
-		return nil, fmt.Errorf("opening local repository: %w", err)
+		return nil, err
 	}
 
 	// not necessarily an error, this could be a clone
-	headRef, err := localRepo.Head()
+	headRef, err := repo.Head()
 	if err != nil {
 		// TODO: can we assume main/master if local HEAD DNE?
 		slog.InfoContext(ctx, "local HEAD not found")

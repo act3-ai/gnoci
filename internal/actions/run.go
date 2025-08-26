@@ -20,8 +20,8 @@ type GitOCI struct {
 	batcher cmd.BatchReadWriter
 
 	// local repository
-	gitDir    string
-	localRepo *git.Repository
+	gitDir string
+	local  *git.Repository
 
 	// OCI remote
 	name   string // may have same value as address
@@ -44,6 +44,22 @@ func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version 
 	}
 }
 
+// localRepo opens the local repository if it hasn't been opened already.
+func (action *GitOCI) localRepo() (*git.Repository, error) {
+	if action.local == nil {
+		if action.gitDir == "" {
+			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
+		}
+		var err error
+		action.local, err = git.PlainOpen(action.gitDir)
+		if err != nil {
+			return nil, fmt.Errorf("opening local repository: %w", err)
+		}
+	}
+
+	return action.local, nil
+}
+
 // Run runs the the primary git-remote-oci action.
 func (action *GitOCI) Run(ctx context.Context) error {
 	// TODO: This is a bit early, but sync.Once seems too much
@@ -51,11 +67,6 @@ func (action *GitOCI) Run(ctx context.Context) error {
 	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
 	if err != nil {
 		return fmt.Errorf("initializing remote graph target: %w", err)
-	}
-
-	action.localRepo, err = git.PlainOpen(action.gitDir)
-	if err != nil {
-		return fmt.Errorf("opening local repository: %w", err)
 	}
 
 	tmpDir := os.TempDir()
