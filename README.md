@@ -1,5 +1,7 @@
 # Git o(n) OCI (gnoci)
 
+Pronounced as [gnocchi](https://www.merriam-webster.com/dictionary/gnocchi).
+
 This project has two main objectives:
 
 1. Define a specification for storing Git repositories as OCI artifacts.
