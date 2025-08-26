@@ -28,7 +28,11 @@ func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	// use pkg dotgit rather than git so we have access to manage packfiles
 	// repo2 := dotgit.New(osfs.New(action.gitDir))
 
-	rc := newRefComparer(action.localRepo, action.remote)
+	repo, err := action.localRepo()
+	if err != nil {
+		return err
+	}
+	rc := newRefComparer(repo, action.remote)
 
 	// resolve state of refs in remote
 	newCommits := make([]plumbing.Hash, 0)          // TODO: not used properly yet, but will be when thin packs are handled properly
@@ -141,12 +145,16 @@ func fmtResult(ok bool, dst plumbing.ReferenceName, why string) string {
 
 // HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.
 func (action *GitOCI) packAll() (h plumbing.Hash, err error) {
-	err = action.localRepo.RepackObjects(&git.RepackConfig{UseRefDeltas: true})
+	repo, err := action.localRepo()
+	if err != nil {
+		return h, err
+	}
+	err = repo.RepackObjects(&git.RepackConfig{UseRefDeltas: true})
 	if err != nil {
 		return h, fmt.Errorf("repacking all objects: %w", err)
 	}
 
-	pos, ok := action.localRepo.Storer.(storer.PackedObjectStorer)
+	pos, ok := repo.Storer.(storer.PackedObjectStorer)
 	if !ok {
 		return h, fmt.Errorf("repository storer is not a storer.PackedObjectStorer")
 	}

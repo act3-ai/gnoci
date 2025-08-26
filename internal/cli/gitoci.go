@@ -2,7 +2,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -26,12 +25,7 @@ func NewCLI(version string) *cobra.Command {
 				address = args[1]
 			}
 
-			gitDir, ok := os.LookupEnv("GIT_DIR")
-			if !ok {
-				return fmt.Errorf("GIT_DIR not set")
-			}
-
-			action := actions.NewGitOCI(cmd.InOrStdin(), cmd.OutOrStdout(), gitDir, name, address, version)
+			action := actions.NewGitOCI(cmd.InOrStdin(), cmd.OutOrStdout(), os.Getenv("GIT_DIR"), name, address, version)
 			return action.Run(cmd.Context())
 		},
 	}

@@ -49,7 +49,11 @@ func (action *GitOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 		// TODO: we may want to use packfile.WritePackfileToObjectStorage directly
 		// what's the difference here? writing the objects themselves rather than the
 		// entire packfile? If the objects already exist in another packfile will they be duplicated?
-		st, ok := action.localRepo.Storer.(storer.Storer)
+		repo, err := action.localRepo()
+		if err != nil {
+			return err
+		}
+		st, ok := repo.Storer.(storer.Storer)
 		if !ok {
 			return fmt.Errorf("repository storer is not a storer.Storer")
 		}
