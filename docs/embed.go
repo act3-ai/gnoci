@@ -20,7 +20,7 @@ var GeneralDocumentation embed.FS
 
 // APIs is embedded API documentation.
 //
-//go:embed apis/gitoci.act3-ai.io/v1alpha1.md
+//go:embed apis/gnoci.act3-ai.io/v1alpha1.md
 var APIs embed.FS
 
 //go:embed apis/schemas/*.schema.json
@@ -66,7 +66,7 @@ func Embedded(root *cobra.Command) *embedutil.Documentation {
 				embedutil.LoadMarkdown(
 					"config-v1alpha1",
 					"v1alpha1 API Documentation",
-					"apis/gitoci.act3-ai.io/v1alpha1.md",
+					"apis/gnoci.act3-ai.io/v1alpha1.md",
 					APIs),
 			),
 		},
@@ -76,7 +76,7 @@ func Embedded(root *cobra.Command) *embedutil.Documentation {
 // SchemaAssociations associates the schema file with all config file types.
 var SchemaAssociations = []cmd.SchemaAssociation{
 	{
-		Definition: "gitoci.act3-ai.io.schema.json",
+		Definition: "gnoci.act3-ai.io.schema.json",
 		// FileMatch:  actions.FileMatch,
 	},
 }

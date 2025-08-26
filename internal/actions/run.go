@@ -7,15 +7,15 @@ import (
 	"os"
 	"strings"
 
-	"github.com/act3-ai/gitoci/internal/cmd"
-	"github.com/act3-ai/gitoci/internal/ociutil"
-	"github.com/act3-ai/gitoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/internal/cmd"
+	"github.com/act3-ai/gnoci/internal/ociutil"
+	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/go-git/go-git/v5"
 	"oras.land/oras-go/v2/content/file"
 )
 
-// GitOCI represents the base action.
-type GitOCI struct {
+// GnOCI represents the base action.
+type GnOCI struct {
 	// TODO: Could be dangerous when storing in struct like this... mutex?
 	batcher cmd.BatchReadWriter
 
@@ -33,9 +33,9 @@ type GitOCI struct {
 	version string
 }
 
-// NewGitOCI creates a new Tool with default values.
-func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version string) *GitOCI {
-	return &GitOCI{
+// NewGnOCI creates a new Tool with default values.
+func NewGnOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version string) *GnOCI {
+	return &GnOCI{
 		batcher: cmd.NewBatcher(in, out),
 		gitDir:  gitDir,
 		name:    shortname,
@@ -45,7 +45,7 @@ func NewGitOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version 
 }
 
 // localRepo opens the local repository if it hasn't been opened already.
-func (action *GitOCI) localRepo() (*git.Repository, error) {
+func (action *GnOCI) localRepo() (*git.Repository, error) {
 	if action.local == nil {
 		if action.gitDir == "" {
 			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
@@ -61,7 +61,7 @@ func (action *GitOCI) localRepo() (*git.Repository, error) {
 }
 
 // Run runs the the primary git-remote-oci action.
-func (action *GitOCI) Run(ctx context.Context) error {
+func (action *GnOCI) Run(ctx context.Context) error {
 	// TODO: This is a bit early, but sync.Once seems too much
 	// TODO: The next 5 "sections" are alot of setup that should be condensed
 	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
@@ -70,7 +70,7 @@ func (action *GitOCI) Run(ctx context.Context) error {
 	}
 
 	tmpDir := os.TempDir()
-	fstorePath, err := os.MkdirTemp(tmpDir, "GitOCI-fstore-*")
+	fstorePath, err := os.MkdirTemp(tmpDir, "GnOCI-fstore-*")
 	if err != nil {
 		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
 	}

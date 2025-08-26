@@ -10,7 +10,7 @@ import (
 )
 
 // list handles the `list` command. Lists refs, one per line.
-func (action *GitOCI) list(ctx context.Context, forPush bool) error {
+func (action *GnOCI) list(ctx context.Context, forPush bool) error {
 	err := action.remote.FetchOrDefault(ctx, action.addess)
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func (action *GitOCI) list(ctx context.Context, forPush bool) error {
 }
 
 // resolveLocalHead returns the local HEAD, if one exists.
-func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference, error) {
+func (action *GnOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference, error) {
 	repo, err := action.localRepo()
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (action *GitOCI) resolveLocalHead(ctx context.Context) (*plumbing.Reference
 
 // listRefs responds to the list command by writing resolved remote references,
 // and the remote HEAD if a local HEAD exists.
-func (action *GitOCI) listRefs(ctx context.Context, headRef *plumbing.Reference) error {
+func (action *GnOCI) listRefs(ctx context.Context, headRef *plumbing.Reference) error {
 	// TODO: what about refs/remotes/<shortname>/<ref>
 	for k, v := range action.remote.HeadRefs() {
 		// list HEAD if one exists locally
@@ -81,7 +81,7 @@ func (action *GitOCI) listRefs(ctx context.Context, headRef *plumbing.Reference)
 
 // TODO: This func lists local refs, which we likley don't even need as git should do this for us,
 // but we'll keep this code block around as a comment for now incase we need it.
-// func (action *GitOCI) list() error {
+// func (action *GnOCI) list() error {
 
 // 	//TODO: until fetch/push is implemented we'll focus on the output for now.
 

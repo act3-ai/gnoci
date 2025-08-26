@@ -53,7 +53,7 @@ Within an existing repository, push to `127.0.0.1:5000/repo/test:example-clone`:
 
 ```console
 $ git push --all oci://127.0.0.1:5000/repo/test:example-clone
-To oci://127.0.0.1:5000/repo/demo:gitoci8
+To oci://127.0.0.1:5000/repo/demo:gnoci8
  * [new branch]      act3-pt/blueprints/render-orphan -> act3-pt/blueprints/render-orphan
  * [new branch]      command-fetch -> command-fetch
  * [new branch]      command-list -> command-list
@@ -67,8 +67,8 @@ Git will not automatically create a new remote:
 
 ```console
 $ git remote -v
-origin  git@github.com:act3-ai/gitoci.git (fetch)
-origin  git@github.com:act3-ai/gitoci.git (push)
+origin  git@github.com:act3-ai/gnoci.git (fetch)
+origin  git@github.com:act3-ai/gnoci.git (push)
 ```
 
 ### Clone

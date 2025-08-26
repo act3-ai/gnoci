@@ -7,14 +7,14 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/act3-ai/gitoci/internal/cmd"
+	"github.com/act3-ai/gnoci/internal/cmd"
 )
 
 // Option defines a supported option capability.
 type Option struct{}
 
 // option handles and responds to the option subcommands.
-func (action *GitOCI) option(ctx context.Context, c cmd.Git) error {
+func (action *GnOCI) option(ctx context.Context, c cmd.Git) error {
 	const (
 		ok          = "ok"
 		unsupported = "unsupported"
@@ -48,7 +48,7 @@ func (action *GitOCI) option(ctx context.Context, c cmd.Git) error {
 }
 
 // handleOption fulfills and option command if supported.
-func (action *GitOCI) handleOption(ctx context.Context, name cmd.Type, value string) error {
+func (action *GnOCI) handleOption(ctx context.Context, name cmd.Type, value string) error {
 	if !cmd.SupportedOption(name) {
 		return errors.Join(cmd.ErrUnsupportedCommand, fmt.Errorf("unsupported option %s", name))
 	}
@@ -67,7 +67,7 @@ func (action *GitOCI) handleOption(ctx context.Context, name cmd.Type, value str
 // verbosity handles the `option verbosity` command.
 //
 // https://git-scm.com/docs/gitremote-helpers#Documentation/gitremote-helpers.txt-optionverbosityn
-func (action *GitOCI) verbosity(value string) error {
+func (action *GnOCI) verbosity(value string) error {
 	val, err := strconv.Atoi(value)
 	if err != nil {
 		return fmt.Errorf("converting verbosity value to int: %w", err)

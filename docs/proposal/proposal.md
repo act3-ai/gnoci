@@ -152,7 +152,7 @@ The git remote helper will be written in Go for the following reasons:
 
 Remote helpers are not required to support all capabilities and features. The following tables provide a brief overview of the capabilities *necessary* for a MVP, complimented by more in-depth descriptions for the decision made.
 
-The background research performed for this proposal led to the conclusion that it is likely only the `connect` capabilities for fetching/pushing packfiles to/from an OCI registry is necessary. As a result, it is likely that other capabilities will be added to increase the efficientcy of `gitoci` as a remote helper. Furthermore, the following capabilities are not required to support `git-lfs`. Given it's relatively widepspread usage of support for `git-lfs` is a requirement of this project.
+The background research performed for this proposal led to the conclusion that it is likely only the `connect` capabilities for fetching/pushing packfiles to/from an OCI registry is necessary. As a result, it is likely that other capabilities will be added to increase the efficientcy of `gnoci` as a remote helper. Furthermore, the following capabilities are not required to support `git-lfs`. Given it's relatively widepspread usage of support for `git-lfs` is a requirement of this project.
 
 The *Support* column indicates if supporting capability is necessary to solve the problem, a nice-to-have, or no plans to support.
 

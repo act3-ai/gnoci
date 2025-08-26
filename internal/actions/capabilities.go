@@ -18,7 +18,7 @@ const (
 	CapPush   Capability = "push"
 )
 
-func (action *GitOCI) capabilities(ctx context.Context) error {
+func (action *GnOCI) capabilities(ctx context.Context) error {
 	capabilities := []Capability{CapOption, CapFetch, CapPush}
 	slog.DebugContext(ctx, "writing supported capabilities", "capabilities", fmt.Sprintf("%v", capabilities))
 	if err := action.batcher.WriteBatch(ctx, capabilities...); err != nil {

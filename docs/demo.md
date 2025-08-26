@@ -12,8 +12,8 @@
 ### Push Local Repo to OCI Remote
 
 ```console
-$ git push --all oci://127.0.0.1:5000/repo/demo:gitoci
-To oci://127.0.0.1:5000/repo/demo:gitoci
+$ git push --all oci://127.0.0.1:5000/repo/demo:gnoci
+To oci://127.0.0.1:5000/repo/demo:gnoci
  * [new branch]      act3-pt/blueprints/render-orphan -> act3-pt/blueprints/render-orphan
  * [new branch]      command-fetch -> command-fetch
  * [new branch]      command-list -> command-list
@@ -28,7 +28,7 @@ To oci://127.0.0.1:5000/repo/demo:gitoci
 ##### Manifest
 
 ```console
-$ oras manifest fetch --plain-http 127.0.0.1:5000/repo/demo:gitoci | jq
+$ oras manifest fetch --plain-http 127.0.0.1:5000/repo/demo:gnoci | jq
 ```
 
 ```json
@@ -60,7 +60,7 @@ $ oras manifest fetch --plain-http 127.0.0.1:5000/repo/demo:gitoci | jq
 ##### Config
 
 ```console
-$ oras manifest fetch-config --plain-http 127.0.0.1:5000/repo/demo:gitoci | jq
+$ oras manifest fetch-config --plain-http 127.0.0.1:5000/repo/demo:gnoci | jq
 ```
 
 ```json
@@ -106,8 +106,8 @@ $ mkdir /tmp/clone1 && cd /tmp/clone1
 ```
 
 ```console
-$ git clone oci://127.0.0.1:5000/repo/demo:gitoci
-Cloning into 'gitoci'...
+$ git clone oci://127.0.0.1:5000/repo/demo:gnoci
+Cloning into 'gnoci'...
 ```
 
 #### View Clone
@@ -116,13 +116,13 @@ Notice how git configures the remote for us. With this configured remote, we can
 
 ```console
 $ ls
-gitoci
+gnoci
 
-$ cd gitoci
+$ cd gnoci
 
 $ git remote -v
-origin	oci://127.0.0.1:5000/repo/demo:gitoci (fetch)
-origin	oci://127.0.0.1:5000/repo/demo:gitoci (push)
+origin	oci://127.0.0.1:5000/repo/demo:gnoci (fetch)
+origin	oci://127.0.0.1:5000/repo/demo:gnoci (push)
 
 $ git status
 On branch main
@@ -145,10 +145,10 @@ Date:   Thu Jul 31 23:38:50 2025 -0400
 Create a second clone so we can fetch changes later.
 
 ```console
-$ mkdir ../../clone2 && cd ../../clone2/gitoci
+$ mkdir ../../clone2 && cd ../../clone2/gnoci
 
-$ git clone oci://127.0.0.1:5000/repo/demo:gitoci
-Cloning into 'gitoci'...
+$ git clone oci://127.0.0.1:5000/repo/demo:gnoci
+Cloning into 'gnoci'...
 ```
 
 ### Push Changes to OCI Remote
@@ -166,7 +166,7 @@ Push to remote:
 
 ```console
 $ git push
-To oci://127.0.0.1:5000/repo/demo:gitoci
+To oci://127.0.0.1:5000/repo/demo:gnoci
    57309ba..4648088  main -> main
 ```
 
@@ -175,7 +175,7 @@ To oci://127.0.0.1:5000/repo/demo:gitoci
 `refs/heads/main` has been updated to the new commit and packfile layer.
 
 ```console
-$ oras manifest fetch-config --plain-http 127.0.0.1:5000/repo/demo:gitoci | jq
+$ oras manifest fetch-config --plain-http 127.0.0.1:5000/repo/demo:gnoci | jq
 ```
 
 ```json
@@ -217,10 +217,10 @@ $ oras manifest fetch-config --plain-http 127.0.0.1:5000/repo/demo:gitoci | jq
 ### Fetch from OCI Remote in Second Repo
 
 ```console
-$ cd ../../clone1/gitoci
+$ cd ../../clone1/gnoci
 
 $ git fetch --all
-From oci://127.0.0.1:5000/repo/demo:gitoci
+From oci://127.0.0.1:5000/repo/demo:gnoci
    57309ba..4648088  main       -> origin/main
 
 $ git pull
@@ -262,7 +262,7 @@ Date:   Fri Aug 1 10:31:41 2025 -0400
 `refs/heads/main` has been updated to the new commit and packfile layer.
 
 ```console
-$ oras manifest fetch-config --plain-http 127.0.0.1:5000/repo/demo:gitoci | jq
+$ oras manifest fetch-config --plain-http 127.0.0.1:5000/repo/demo:gnoci | jq
 ```
 
 ```json
@@ -327,7 +327,7 @@ Date:   Fri Aug 1 10:20:48 2025 -0400
 
 ## Behind the Scenes Push
 
-In an existing repository: `git push --all oci://127.0.0.1:5000/repo/demo:gitoci`.
+In an existing repository: `git push --all oci://127.0.0.1:5000/repo/demo:gnoci`.
 
 On Stdin/Stdout:
 

@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiutils "github.com/act3-ai/gitoci/pkg/apis/utils"
+	apiutils "github.com/act3-ai/gnoci/pkg/apis/utils"
 
 	"github.com/act3-ai/go-common/pkg/redact"
 

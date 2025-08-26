@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/act3-ai/gitoci/internal/cmd"
-	"github.com/act3-ai/gitoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/internal/cmd"
+	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/storer"
@@ -20,7 +20,7 @@ import (
 // TODO: passing around *git.Repository and oci.ConfigGit may beg for an interface
 
 // push handles the `push` command.
-func (action *GitOCI) push(ctx context.Context, cmds []cmd.Git) error {
+func (action *GnOCI) push(ctx context.Context, cmds []cmd.Git) error {
 	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
 		return fmt.Errorf("fetching remote metadta: %w", err)
 	}
@@ -144,7 +144,7 @@ func fmtResult(ok bool, dst plumbing.ReferenceName, why string) string {
 }
 
 // HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.
-func (action *GitOCI) packAll() (h plumbing.Hash, err error) {
+func (action *GnOCI) packAll() (h plumbing.Hash, err error) {
 	repo, err := action.localRepo()
 	if err != nil {
 		return h, err
@@ -173,7 +173,7 @@ func (action *GitOCI) packAll() (h plumbing.Hash, err error) {
 
 // createPack builds a packfile using a set of hashes.
 // TODO: not used
-// func (action *GitOCI) createPack(hashes []plumbing.Hash) (h plumbing.Hash, err error) {
+// func (action *GnOCI) createPack(hashes []plumbing.Hash) (h plumbing.Hash, err error) {
 // 	// reference implementation: https://github.com/go-git/go-git/blob/v5.16.2/repository.go#L1815
 // 	pfw, ok := action.localRepo.Storer.(storer.PackfileWriter)
 // 	if !ok {

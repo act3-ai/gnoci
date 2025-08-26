@@ -1,4 +1,4 @@
-# Git Repositories Stored in OCI Registries
+# Git o(n) OCI (gnoci)
 
 This project has two main objectives:
 

@@ -10,8 +10,8 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/act3-ai/gitoci/internal/ociutil"
-	"github.com/act3-ai/gitoci/pkg/oci"
+	"github.com/act3-ai/gnoci/internal/ociutil"
+	"github.com/act3-ai/gnoci/pkg/oci"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"

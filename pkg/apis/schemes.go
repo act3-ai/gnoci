@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"github.com/act3-ai/gitoci/pkg/apis/gitoci.act3-ai.io/v1alpha1"
+	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
 )
 
 // NewScheme creates the "scheme" for the API.
