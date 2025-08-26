@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/act3-ai/gitoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/opencontainers/go-digest"

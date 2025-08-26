@@ -43,7 +43,7 @@ func NewGraphTarget(ctx context.Context, ref string) (oras.GraphTarget, error) {
 		return nil, fmt.Errorf("failed to get credential store: %w", err)
 	}
 
-	return create(ctx, parsedRef, false, "gitoci", credStore)
+	return create(ctx, parsedRef, false, "gnoci", credStore)
 }
 
 func create(ctx context.Context, ref registry.Reference, noncompliant bool, userAgent string, credStore credentials.Store) (oras.GraphTarget, error) {

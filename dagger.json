@@ -1,5 +1,5 @@
 {
-  "name": "gitoci",
+  "name": "gnoci",
   "engineVersion": "v0.18.14",
   "sdk": {
     "source": "go"

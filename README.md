@@ -1,4 +1,6 @@
-# Git Repositories Stored in OCI Registries
+# Git o(n) OCI (gnoci)
+
+Pronounced as [gnocchi](https://www.merriam-webster.com/dictionary/gnocchi).
 
 This project has two main objectives:
 

@@ -1,4 +1,4 @@
-module dagger/gitoci
+module dagger/gnoci
 
 go 1.24.4
 

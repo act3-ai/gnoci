@@ -1,4 +1,4 @@
-// A generated module for Gitoci functions
+// A generated module for gnoci functions
 //
 // This module has been generated via dagger init and serves as a reference to
 // basic module structure as you get started with Dagger.
@@ -16,18 +16,18 @@ package main
 
 import (
 	"context"
-	"dagger/gitoci/internal/dagger"
+	"dagger/gnoci/internal/dagger"
 )
 
-type Gitoci struct{}
+type Gnoci struct{}
 
 // Returns a container that echoes whatever string argument is provided
-func (m *Gitoci) ContainerEcho(stringArg string) *dagger.Container {
+func (m *Gnoci) ContainerEcho(stringArg string) *dagger.Container {
 	return dag.Container().From("alpine:latest").WithExec([]string{"echo", stringArg})
 }
 
 // Returns lines that match a pattern in the files of the provided Directory
-func (m *Gitoci) GrepDir(ctx context.Context, directoryArg *dagger.Directory, pattern string) (string, error) {
+func (m *Gnoci) GrepDir(ctx context.Context, directoryArg *dagger.Directory, pattern string) (string, error) {
 	return dag.Container().
 		From("alpine:latest").
 		WithMountedDirectory("/mnt", directoryArg).

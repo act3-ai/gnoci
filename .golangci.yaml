@@ -105,7 +105,7 @@ linters:
         - fmt\..?(P|p)rint.*\(
       ignore-package-globs:
         - encoding/*
-        - github.com/act3-ai/gitoci/*
+        - github.com/act3-ai/gnoci/*
   exclusions:
     generated: lax
     presets:
@@ -128,7 +128,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/act3-ai/gitoci/*
+        - github.com/act3-ai/gnoci/*
   exclusions:
     generated: lax
     paths:

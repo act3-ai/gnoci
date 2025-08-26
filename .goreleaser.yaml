@@ -2,7 +2,7 @@
 version: 2
 
 builds:
-  - id: gitoci
+  - id: gnoci
     binary: git-remote-oci
     goos:
       - linux
@@ -20,9 +20,9 @@ builds:
     main: ./cmd/git-remote-oci/
 
 archives:
-  - id: gitoci-archives
+  - id: gnoci-archives
     ids:
-      - gitoci
+      - gnoci
     formats: ["tar.gz"]
     builds_info:
       mode: 755
@@ -35,9 +35,9 @@ archives:
 release:
   github:
     owner: act3-ai
-    name: gitoci
+    name: gnoci
   ids:
-    - gitoci-archives
+    - gnoci-archives
   make_latest: envOrDefault "RELEASE_LATEST" "false"  # don't add 'latest' tag by default
   mode: replace  # if there's a need to re-release, don't duplicate the release notes
   skip_upload: false
@@ -46,18 +46,18 @@ checksum:
   name_template: git-remote-oci-v{{ .Version }}-checksums.txt
   algorithm: sha256
   ids:
-    - gitoci-archives
+    - gnoci-archives
   disable: false
 
 brews:
-  - name: gitoci
-    ids: [gitoci-archives]
+  - name: gnoci
+    ids: [gnoci-archives]
     commit_author:
       name: "{{ .Env.RELEASE_AUTHOR }}"
       email: "{{ .Env.RELEASE_AUTHOR_EMAIL }}"
     commit_msg_template: |
       fix(git-remote-oci): updated to {{ .Tag }}
-    homepage: https://github.com/act3-ai/gitoci
+    homepage: https://github.com/act3-ai/gnoci
     description: "A CLI tool for packaging, uploading, and downloading data from OCI registries."
     license: "MIT"
     skip_upload: auto # don't upload if prerelease
@@ -65,10 +65,10 @@ brews:
     repository:
       owner: act3-ai
       name: homebrew-tap
-      branch: bump-gitoci-{{ .Tag }}
+      branch: bump-gnoci-{{ .Tag }}
       git:
         url: git@github.com:act3-ai/homebrew-tap.git
         private_key: "{{ .Env.SSH_PRIVATE_KEY }}" # set in .envrc.private
       pull_request:
         enabled: true
-    url_template: "https://github.com/act3-ai/gitoci/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    url_template: "https://github.com/act3-ai/gnoci/releases/download/{{ .Tag }}/{{ .ArtifactName }}"

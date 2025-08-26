@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/act3-ai/gitoci/internal/cmd"
+	"github.com/act3-ai/gnoci/internal/cmd"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
@@ -14,7 +14,7 @@ import (
 
 // TODO: look into the keep file lock stuff
 
-func (action *GitOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
+func (action *GnOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 	if err := action.remote.Fetch(ctx, action.addess); err != nil {
 		return fmt.Errorf("fetching remote metadata: %w", err)
 	}

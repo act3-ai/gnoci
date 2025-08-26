@@ -1,4 +1,4 @@
-module github.com/act3-ai/gitoci
+module github.com/act3-ai/gnoci
 
 go 1.24.4
 

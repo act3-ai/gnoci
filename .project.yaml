@@ -4,10 +4,10 @@ apiVersion: project.act3-ace.io/v1beta1
 
 # Project metadata used in Blueprints
 meta:
-    name: gitoci
+    name: gnoci
     title: Git Remote Helper for OCI Registries
     description: A Git remote helper for syncing Git repositories in OCI Registries.
-    repository: https://github.com/act3-ai/gitoci.git
+    repository: https://github.com/act3-ai/gnoci.git
     authors:
         - name: Nathan Joslin
           email: nathan.joslin@udri.udayton.edu
@@ -18,8 +18,8 @@ blueprints:
       inputs:
           envPrefix: GITOCI # Prefix for configuration environment variables
           executableName: git-remote-oci # Name of the CLI's executable
-          groupName: gitoci.act3-ai.io # API group name for your project
-          modulePath: github.com/act3-ai/gitoci # Go module path for the project
+          groupName: gnoci.act3-ai.io # API group name for your project
+          modulePath: github.com/act3-ai/gnoci # Go module path for the project
     - ref: https://github.com/act3-ai/blueprint-release.git@v0.1.7
       inputs:
           executableName: git-remote-oci # Name of the Go executable
