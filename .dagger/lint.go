@@ -9,7 +9,9 @@ import (
 	"github.com/sourcegraph/conc/pool"
 )
 
-// Lint is a subcommand for linting operations.
+// Linting operations.
+//
+//nolint:staticcheck
 func (g *Gnoci) Lint() *Lint {
 	return &Lint{
 		Gnoci: g,
@@ -21,7 +23,9 @@ type Lint struct {
 	*Gnoci
 }
 
-// All runs all linters in parallel: yamllint, markdownlint-cli2, golangci-lint, and shellcheck.
+// Run all linters.
+//
+//nolint:staticcheck
 func (l *Lint) All(ctx context.Context,
 	// Source code directory
 	// +defaultPath="/"
@@ -69,7 +73,9 @@ func (l *Lint) All(ctx context.Context,
 	return strings.Join(result, "\n=====\n"), err
 }
 
-// Yamllint lints all yaml files.
+// Lint yaml files.
+//
+//nolint:staticcheck
 func (l *Lint) Yamllint(ctx context.Context,
 	// Source code directory
 	// +defaultPath="/"
@@ -83,7 +89,9 @@ func (l *Lint) Yamllint(ctx context.Context,
 				Stdout(ctx)
 }
 
-// Markdownlint lints all markdown files.
+// Lint markdown files.
+//
+//nolint:staticcheck
 func (l *Lint) Markdownlint(ctx context.Context,
 	// source code directory
 	// +defaultPath="/"
@@ -97,7 +105,9 @@ func (l *Lint) Markdownlint(ctx context.Context,
 				Stdout(ctx)
 }
 
-// Shellcheck lints all **/*.sh and **/*.bash files.
+// Lint **/*.sh and **/*.bash files.
+//
+//nolint:staticcheck
 func (l *Lint) Shellcheck(ctx context.Context,
 	// Source code directory
 	// +defaultPath="."
@@ -138,7 +148,9 @@ func (l *Lint) Shellcheck(ctx context.Context,
 	return strings.Join(res, "\n\n"), err
 }
 
-// Go lints all go files.
+// Lint go files.
+//
+//nolint:staticcheck
 func (l *Lint) Go(ctx context.Context) (string, error) {
 	return dag.GolangciLint(). //nolint:wrapcheck
 					Run(l.Source, dagger.GolangciLintRunOpts{
