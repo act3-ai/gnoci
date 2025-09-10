@@ -15,23 +15,21 @@
 package main
 
 import (
-	"context"
 	"dagger/gnoci/internal/dagger"
 )
 
-type Gnoci struct{}
-
-// Returns a container that echoes whatever string argument is provided
-func (m *Gnoci) ContainerEcho(stringArg string) *dagger.Container {
-	return dag.Container().From("alpine:latest").WithExec([]string{"echo", stringArg})
+type Gnoci struct {
+	// source code directory
+	Source *dagger.Directory
 }
 
-// Returns lines that match a pattern in the files of the provided Directory
-func (m *Gnoci) GrepDir(ctx context.Context, directoryArg *dagger.Directory, pattern string) (string, error) {
-	return dag.Container().
-		From("alpine:latest").
-		WithMountedDirectory("/mnt", directoryArg).
-		WithWorkdir("/mnt").
-		WithExec([]string{"grep", "-R", pattern, "."}).
-		Stdout(ctx)
+func New(
+	// top level source code directory
+	// +defaultPath="/"
+	// +ignore=["**/*.log", ".vscode/*", "*.private", "bin/*", "releases/*"]
+	src *dagger.Directory,
+) *Gnoci {
+	return &Gnoci{
+		Source: src,
+	}
 }
