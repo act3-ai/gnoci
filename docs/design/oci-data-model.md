@@ -280,14 +280,25 @@ By using OCI tag references as the git remote reference format, distributing the
 
 - Conditional pushes with `ETag` header, depending on registry support.
   - "Clients MAY use a conditional HTTP push for registries that support ETag conditions to avoid conflicts with other clients." See [OCI distribution spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#referrers-tag-schema).
-- After pushing by digest, re-resolve the OCI tag reference to a digest just before tagging.
+- After pushing by digest, re-resolve the OCI tag reference to a digest just before tagging. This is done regardless if ETags are supported, as to not assume a registry properly supports it.
   - This method does not fully eliminate the data race.
+  
+If a data race is detected, `git-remote-oci` will attempt to resolve it in a manner similar to `git`. In other words, it will fail if a fast-forward push is not possible. A data race involving pushes to separate branches may be an OCI data race, but is easily resolved by `git-remote-oci` by resolving the difference in packfile layers added to the manifest.
 
 ## Limitations
 
 ### Maximum Manifest Size
 
 Although the OCI does not specify strict [manifest size limitations](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests), also see [spec v1.1 releases](https://opencontainers.org/posts/blog/2024-03-13-image-and-distribution-1-1/#manifest-maximum-size), it does suggest at least a 4MiB image manifest size limit. Many clients and registries enforce their own size limits. As such, at some point in time packfiles in the artifact are "merged" to accommodate the manifest size limitation.
+
+As a rough estimation, a manifest would need over 16,000 pushes before reaching 4MiB:
+
+Assuming:
+- 435 byte manifest, with no layers
+- 252 bytes for each layer descriptor in manifest
+- 4 MiB size
+
+((4.194304e+6) - 435 ) / 252 = 16 642.3373 pushes
 
 ### Usage of Packfiles
 

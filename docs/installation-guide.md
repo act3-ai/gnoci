@@ -4,7 +4,7 @@ This Installation Guide provides the steps necessary to set up `git-remote-oci`.
 
 Regardless of installation method, `git-remote-oci` *must* be made available on `$PATH` to be accessible by `git`.
 
-## Install From Srouce
+## Install From Source
 
 1. Clone source repository
    - e.g. `git clone git@github.com:act3-ai/gnoci.git`
