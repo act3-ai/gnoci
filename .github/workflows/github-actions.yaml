@@ -1,0 +1,25 @@
+name: dagger
+run-name: ${{ github.actor }} is testing with dagger 🗡️
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dagger Engine
+        uses: dagger/dagger-for-github@8.1.0
+            
+      - name: Lint
+        run: dagger call lint all
+
+      - name: Test
+        run: dagger call test all
+    
+      - name: Build
+        run: dagger call build-platforms
