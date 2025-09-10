@@ -50,7 +50,7 @@ Required Environment Variables:
     - GITHUB_API_TOKEN     - repo:api access
     - RELEASE_AUTHOR       - username of release author, for homebrew tap
     - RELEASE_AUTHOR_EMAIL - email of release author, for homebrew tap
-    - SSH_PRIVATE_KEY      - ssh key for homebrew tap
+    - SSH_PRIVATE_KEY      - ssh key for homebrew tap - TODO: NOT USED AT THE MOMENT
 
 Dependencies:
     - dagger
@@ -72,7 +72,6 @@ force="${FORCE:-false}"       # skip git status checks
 interactive="${INTERACTIVE:-false}" # interactive mode
 silent="${SILENT:-false}"      # silence dagger (dagger --silent)
 explicit_version="${VERSION:-""}"  # release for a specific version
-
 release_latest="${RELEASE_LATEST:-false}" # tag release as latest
 
 
@@ -155,7 +154,7 @@ check_upstream() {
 prepare() {
     echo "Running prepare stage..."
 
-    # old_version=v$(cat "$version_path")
+    old_version=v$(cat "$version_path")
     
     # linters and unit tests
     if [ "$force" != "true" ]; then
@@ -174,20 +173,21 @@ prepare() {
     fi
 
     # verify release version with gorelease
-    # if [ "$force" != "true" ]; then
-    #     dagger -m="$mod_release" -s="$silent" --src="." call \
-    #         go verify --target-version="$vVersion" --current-version="$old_version"
-    # fi
+    if [ "$force" != "true" ]; then
+        dagger -m="$mod_release" -s="$silent" --src="." call \
+            go verify --target-version="$vVersion" --current-version="$old_version"
+    fi
 
-    dagger -m="$mod_release" -s="$silent" --src="." call prepare \
-    --ignore-error="$force" \
-    --version="$vVersion" \
-    --version-path="$version_path" \
-    --changelog-path="$changelog_path" \
-    export --path="."
+    dagger -m="$mod_release" -s="$silent" --src="." call \
+        prepare \
+        --ignore-error="$force" \
+        --version="$vVersion" \
+        --version-path="$version_path" \
+        --changelog-path="$changelog_path" \
+        export --path="."
 
-    echo -e "Successfully ran prepare stage.\n"
-    echo -e "Please review the local changes, especially releases/$vVersion.md\n"
+    echo "Successfully ran prepare stage."
+    echo "Please review the local changes, especially releases/$vVersion.md"
     if [ "$interactive" = "true" ] && [ "$(prompt_continue "approve")" = "true" ]; then
             approve
     fi
@@ -224,24 +224,22 @@ publish() {
     echo "Running publish stage..."
 
     git fetch --tags
-    check_upstream "HEAD~1" # compare before our release commit, i.e. we're only fast forwarding that commit
+    check_upstream "HEAD~1" # compare before our release commit, we should only fast forwarding that commit
 
     # push this branch and the associated tags
     git push --follow-tags
 
     vVersion=v$(cat "$version_path")
 
-    dagger -m="$mod_goreleaser" -s="$silent" --src="." --version v2.9.0 call \
-    with-secret-variable --name="GITHUB_TOKEN" --secret=env:GITHUB_API_TOKEN \
-    with-secret-variable --name="SSH_PRIVATE_KEY" --secret=env:SSH_PRIVATE_KEY \
-    with-env-variable --name="RELEASE_LATEST" --value="$release_latest" \
-    with-env-variable --name="RELEASE_AUTHOR" --value="$RELEASE_AUTHOR" \
-    with-env-variable --name="RELEASE_AUTHOR_EMAIL" --value="$RELEASE_AUTHOR_EMAIL" \
-    release \
-    with-notes --notes "${notes_dir}/${vVersion}.md" \
-    run
+    dagger -m="$mod_release" -s="$silent" --src="." --netrc=file:"$netrc_file" call \
+        create-github \
+        --host="https://github.com" \
+        --repo="act3-ai/gnoci" \
+        --version="$vVersion" \
+        --notes="$release_notes_path" \
+        --token=env:GITHUB_API_TOKEN
 
-    echo -e "Successfully ran publish stage.\n"
+    echo  "Successfully ran publish stage."
     echo "Release process complete."
 }
 
