@@ -1,6 +1,6 @@
 {
   "name": "gnoci",
-  "engineVersion": "v0.18.14",
+  "engineVersion": "v0.18.17",
   "sdk": {
     "source": "go"
   },
@@ -11,14 +11,34 @@
       "pin": "86ec5dc4ee1fd4d168d51946bc82aa4110cc8d96"
     },
     {
+      "name": "go",
+      "source": "github.com/sagikazarmark/daggerverse/go@go/v0.9.0",
+      "pin": "d9ba06776c4c1ccf6f329bd862b9b439c4582ab6"
+    },
+    {
+      "name": "golangci-lint",
+      "source": "github.com/sagikazarmark/daggerverse/golangci-lint@golangci-lint/v0.9.0",
+      "pin": "e6c14178bcaaff9e102e2a89173ca31479b80629"
+    },
+    {
       "name": "goreleaser",
       "source": "github.com/act3-ai/dagger/goreleaser@goreleaser/v0.1.3",
       "pin": "8d3e75d5a1eb8ff0a96afe2ee29dfaec6227bcf5"
     },
     {
+      "name": "govulncheck",
+      "source": "github.com/act3-ai/dagger/govulncheck@govulncheck/v0.1.1",
+      "pin": "5579aa8f127350d77c970c98784f40f56d279fbd"
+    },
+    {
       "name": "release",
       "source": "github.com/act3-ai/dagger/release@release/v0.1.9",
       "pin": "33748b33d71e31975d7297922fd2267341fae06d"
+    },
+    {
+      "name": "shellcheck",
+      "source": "github.com/dagger/dagger/modules/shellcheck@v0.18.17",
+      "pin": "1828f0be7b67d0475993f49a9c8b5a3e54877daf"
     }
   ],
   "source": ".dagger"

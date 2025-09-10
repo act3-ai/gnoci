@@ -5,6 +5,7 @@ go 1.24.4
 require (
 	github.com/99designs/gqlgen v0.17.75
 	github.com/Khan/genqlient v0.8.1
+	github.com/sourcegraph/conc v0.3.0
 	github.com/vektah/gqlparser/v2 v2.5.28
 	go.opentelemetry.io/otel v1.36.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.12.2
@@ -22,6 +23,11 @@ require (
 	go.opentelemetry.io/proto/otlp v1.6.0
 	golang.org/x/sync v0.15.0
 	google.golang.org/grpc v1.73.0
+)
+
+require (
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.9.0 // indirect
 )
 
 require (
