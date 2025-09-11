@@ -294,6 +294,7 @@ Although the OCI does not specify strict [manifest size limitations](https://git
 As a rough estimation, a manifest would need over 16,000 pushes before reaching 4MiB:
 
 Assuming:
+
 - 435 byte manifest, with no layers
 - 252 bytes for each layer descriptor in manifest
 - 4 MiB size

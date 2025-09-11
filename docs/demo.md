@@ -1,6 +1,5 @@
 # Final Presentation Demo
 
-
 ## Preparations
 
 - Build from source: `go build -o bin/git-remote-oci ./cmd/git-remote-oci`
@@ -385,4 +384,3 @@ Cleaned Output:
 # EOF
 # program complete
 ```
-
