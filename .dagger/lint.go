@@ -36,55 +36,53 @@ func (l *Lint) All(ctx context.Context,
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "yamllint")
 		defer span.End()
-		return l.Yaml(ctx, l.Source)
+		return l.Yaml(ctx)
 	})
 
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "markdownlint")
 		defer span.End()
-		return l.Markdown(ctx, l.Source)
+		return l.Markdown(ctx)
 	})
 
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "golangci-lint")
 		defer span.End()
-		return dag.GolangciLint().
-			Run(l.Source, dagger.GolangciLintRunOpts{
-				Timeout: "5m",
-			}).
-			Stdout(ctx)
+		return l.Go(ctx)
 	})
 
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "govulncheck")
 		defer span.End()
-		return dag.Govulncheck().
-			ScanSource(ctx, l.Source)
+		return l.Vulncheck(ctx)
 	})
 
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "shellcheck")
 		defer span.End()
-		return l.Shell(ctx, src)
+		return l.Shell(ctx)
 	})
 
 	result, err := p.Wait()
-	// TODO maybe we should order the lint result strings
 	return strings.Join(result, "\n=====\n"), err
+}
+
+// Run govulncheck.
+//
+//nolint:staticcheck
+func (l *Lint) Vulncheck(ctx context.Context) (string, error) {
+	return dag.Govulncheck(). //nolint:wrapcheck
+					ScanSource(ctx, l.Source)
 }
 
 // Lint yaml files.
 //
 //nolint:staticcheck
-func (l *Lint) Yaml(ctx context.Context,
-	// Source code directory
-	// +defaultPath="/"
-	src *dagger.Directory,
-) (string, error) {
+func (l *Lint) Yaml(ctx context.Context) (string, error) {
 	return dag.Container(). //nolint:wrapcheck
 				From("docker.io/cytopia/yamllint:1").
 				WithWorkdir("/src").
-				WithDirectory("/src", src).
+				WithDirectory("/src", l.Source).
 				WithExec([]string{"yamllint", "."}).
 				Stdout(ctx)
 }
@@ -92,15 +90,11 @@ func (l *Lint) Yaml(ctx context.Context,
 // Lint markdown files.
 //
 //nolint:staticcheck
-func (l *Lint) Markdown(ctx context.Context,
-	// source code directory
-	// +defaultPath="/"
-	src *dagger.Directory,
-) (string, error) {
+func (l *Lint) Markdown(ctx context.Context) (string, error) {
 	return dag.Container(). //nolint:wrapcheck
 				From("docker.io/davidanson/markdownlint-cli2:v0.14.0").
 				WithWorkdir("/src").
-				WithDirectory("/src", src).
+				WithDirectory("/src", l.Source).
 				WithExec([]string{"markdownlint-cli2", "."}).
 				Stdout(ctx)
 }
@@ -108,18 +102,14 @@ func (l *Lint) Markdown(ctx context.Context,
 // Lint **/*.sh and **/*.bash files.
 //
 //nolint:staticcheck
-func (l *Lint) Shell(ctx context.Context,
-	// Source code directory
-	// +defaultPath="."
-	src *dagger.Directory,
-) (string, error) {
+func (l *Lint) Shell(ctx context.Context) (string, error) {
 	// TODO: Consider adding an option for specifying script files that don't have the extension, such as WithShellScripts.
-	shEntries, err := src.Glob(ctx, "**/*.sh")
+	shEntries, err := l.Source.Glob(ctx, "**/*.sh")
 	if err != nil {
 		return "", fmt.Errorf("globbing shell scripts with *.sh extension: %w", err)
 	}
 
-	bashEntries, err := src.Glob(ctx, "**/*.bash")
+	bashEntries, err := l.Source.Glob(ctx, "**/*.bash")
 	if err != nil {
 		return "", fmt.Errorf("globbing shell scripts with *.bash extension: %w", err)
 	}
@@ -133,7 +123,7 @@ func (l *Lint) Shell(ctx context.Context,
 	for _, entry := range entries {
 		p.Go(func(ctx context.Context) (string, error) {
 			r, err := dag.Shellcheck().
-				Check(src.File(entry)).
+				Check(l.Source.File(entry)).
 				Report(ctx)
 			// this is needed because of weird error handling  in shellcheck here:
 			// https://github.com/dagger/dagger/blob/0b46ea3c49b5d67509f67747742e5d8b24be9ef7/modules/shellcheck/main.go#L137
