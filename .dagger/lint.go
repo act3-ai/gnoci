@@ -36,13 +36,13 @@ func (l *Lint) All(ctx context.Context,
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "yamllint")
 		defer span.End()
-		return l.Yamllint(ctx, l.Source)
+		return l.Yaml(ctx, l.Source)
 	})
 
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "markdownlint")
 		defer span.End()
-		return l.Markdownlint(ctx, l.Source)
+		return l.Markdown(ctx, l.Source)
 	})
 
 	p.Go(func(ctx context.Context) (string, error) {
@@ -65,7 +65,7 @@ func (l *Lint) All(ctx context.Context,
 	p.Go(func(ctx context.Context) (string, error) {
 		ctx, span := Tracer().Start(ctx, "shellcheck")
 		defer span.End()
-		return l.Shellcheck(ctx, src)
+		return l.Shell(ctx, src)
 	})
 
 	result, err := p.Wait()
@@ -76,7 +76,7 @@ func (l *Lint) All(ctx context.Context,
 // Lint yaml files.
 //
 //nolint:staticcheck
-func (l *Lint) Yamllint(ctx context.Context,
+func (l *Lint) Yaml(ctx context.Context,
 	// Source code directory
 	// +defaultPath="/"
 	src *dagger.Directory,
@@ -92,7 +92,7 @@ func (l *Lint) Yamllint(ctx context.Context,
 // Lint markdown files.
 //
 //nolint:staticcheck
-func (l *Lint) Markdownlint(ctx context.Context,
+func (l *Lint) Markdown(ctx context.Context,
 	// source code directory
 	// +defaultPath="/"
 	src *dagger.Directory,
@@ -108,7 +108,7 @@ func (l *Lint) Markdownlint(ctx context.Context,
 // Lint **/*.sh and **/*.bash files.
 //
 //nolint:staticcheck
-func (l *Lint) Shellcheck(ctx context.Context,
+func (l *Lint) Shell(ctx context.Context,
 	// Source code directory
 	// +defaultPath="."
 	src *dagger.Directory,
