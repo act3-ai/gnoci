@@ -11,8 +11,6 @@ notes_dir="releases"
 # Dagger module dependencies, see dagger.json for versions
 mod_release="release"
 mod_gitcliff="git-cliff"
-mod_goreleaser="goreleaser"
-
 
 help() {
     cat <<EOF
@@ -72,8 +70,6 @@ force="${FORCE:-false}"       # skip git status checks
 interactive="${INTERACTIVE:-false}" # interactive mode
 silent="${SILENT:-false}"      # silence dagger (dagger --silent)
 explicit_version="${VERSION:-""}"  # release for a specific version
-release_latest="${RELEASE_LATEST:-false}" # tag release as latest
-
 
 # Get commands and flags
 while [[ $# -gt 0 ]]; do
@@ -230,8 +226,9 @@ publish() {
     git push --follow-tags
 
     vVersion=v$(cat "$version_path")
+    release_notes_path="${notes_dir}/${vVersion}.md"
 
-    dagger -m="$mod_release" -s="$silent" --src="." --netrc=file:"$netrc_file" call \
+    dagger -m="$mod_release" -s="$silent" --src="." call \
         create-github \
         --host="https://github.com" \
         --repo="act3-ai/gnoci" \
