@@ -28,8 +28,6 @@ type GnOCI struct {
 	addess string
 	remote model.Modeler
 
-	Option
-
 	version string
 }
 
@@ -98,12 +96,12 @@ func (action *GnOCI) Run(ctx context.Context) error {
 
 	var done bool
 	for !done {
-		c, err := action.batcher.Read(ctx)
+		gc, err := action.batcher.Read(ctx)
 		if err != nil {
 			return fmt.Errorf("reading next line: %w", err)
 		}
 
-		switch c.Cmd {
+		switch gc.Cmd {
 		case cmd.Done:
 			done = true
 		case cmd.Empty:
@@ -114,11 +112,11 @@ func (action *GnOCI) Run(ctx context.Context) error {
 				return fmt.Errorf("running capabilities command: %w", err)
 			}
 		case cmd.Option:
-			if err := action.option(ctx, c); err != nil {
+			if err := cmd.HandleOption(ctx, gc, action.batcher); err != nil {
 				return fmt.Errorf("running option command: %w", err)
 			}
 		case cmd.List:
-			if err := action.list(ctx, (c.SubCmd == cmd.ListForPush)); err != nil {
+			if err := action.list(ctx, (gc.SubCmd == cmd.ListForPush)); err != nil {
 				return fmt.Errorf("running list command: %w", err)
 			}
 		case cmd.Push:
@@ -127,7 +125,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("reading push batch: %w", err)
 			}
-			fullBatch := append([]cmd.Git{c}, batch...)
+			fullBatch := append([]cmd.Git{gc}, batch...)
 
 			if err := action.push(ctx, fullBatch); err != nil {
 				return fmt.Errorf("running push command: %w", err)
@@ -137,7 +135,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("reading fetch batch: %w", err)
 			}
-			fullBatch := append([]cmd.Git{c}, batch...)
+			fullBatch := append([]cmd.Git{gc}, batch...)
 
 			if err := action.fetch(ctx, fullBatch); err != nil {
 				return fmt.Errorf("running fetch command: %w", err)
