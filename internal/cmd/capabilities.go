@@ -1,4 +1,4 @@
-package actions
+package cmd
 
 import (
 	"context"
@@ -18,10 +18,10 @@ const (
 	CapPush   Capability = "push"
 )
 
-func (action *GnOCI) capabilities(ctx context.Context) error {
+func HandleCapabilities(ctx context.Context, g Git, w BatchWriter) error {
 	capabilities := []Capability{CapOption, CapFetch, CapPush}
 	slog.DebugContext(ctx, "writing supported capabilities", "capabilities", fmt.Sprintf("%v", capabilities))
-	if err := action.batcher.WriteBatch(ctx, capabilities...); err != nil {
+	if err := w.WriteBatch(ctx, capabilities...); err != nil {
 		return fmt.Errorf("writing capabilities: %w", err)
 	}
 	return nil

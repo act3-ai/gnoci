@@ -89,7 +89,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 	case c.Cmd != cmd.Capabilities:
 		return fmt.Errorf("unexpected first command %s, expected 'capabilities'", c.Cmd)
 	default:
-		if err := action.capabilities(ctx); err != nil {
+		if err := cmd.HandleCapabilities(ctx, c, action.batcher); err != nil {
 			return err
 		}
 	}
@@ -108,7 +108,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 			continue
 		case cmd.Capabilities:
 			// Git shouldn't need to do this again, but let's be safe
-			if err := action.capabilities(ctx); err != nil {
+			if err := cmd.HandleCapabilities(ctx, gc, action.batcher); err != nil {
 				return fmt.Errorf("running capabilities command: %w", err)
 			}
 		case cmd.Option:
