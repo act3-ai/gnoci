@@ -66,19 +66,6 @@ func (action *GnOCI) Run(ctx context.Context) error {
 
 	action.remote = model.NewModeler(fstore, gt)
 
-	// first command is always "capabilities"
-	c, err := action.batcher.Read(ctx)
-	switch {
-	case err != nil:
-		return fmt.Errorf("reading initial command: %w", err)
-	case c.Cmd != cmd.Capabilities:
-		return fmt.Errorf("unexpected first command %s, expected 'capabilities'", c.Cmd)
-	default:
-		if err := cmd.HandleCapabilities(ctx, c, action.batcher); err != nil {
-			return err
-		}
-	}
-
 	var done bool
 	for !done {
 		gc, err := action.batcher.Read(ctx)
