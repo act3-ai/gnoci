@@ -11,27 +11,27 @@ var (
 	ErrUnsupportedCommand = errors.New("unsupported git-remote-helper command")
 )
 
-// Type is an implemented git-remote-helper command provided by Git.
+// Command is an implemented git-remote-helper command provided by Git.
 //
 // See https://git-scm.com/docs/gitremote-helpers#_commands.
-type Type string
+type Command string
 
 // https://git-scm.com/docs/gitremote-helpers#_commands
 const (
 	// Git conventions.
-	Capabilities Type = "capabilities"
-	List         Type = "list"
-	ListForPush  Type = "for-push"
-	Push         Type = "push"
-	Fetch        Type = "fetch"
+	Capabilities Command = "capabilities"
+	List         Command = "list"
+	ListForPush  Command = "for-push"
+	Push         Command = "push"
+	Fetch        Command = "fetch"
 
 	// not a Git convention.
-	Empty Type = "empty" // marks empty line - a separator
-	Done  Type = "done"  // marks end of input
+	Empty Command = "empty" // marks empty line - a separator
+	Done  Command = "done"  // marks end of input
 )
 
 // Commands defines all implemented git-remote-helper commands.
-var Commands = []Type{
+var Commands = []Command{
 	Capabilities,
 	Empty,
 	List,
@@ -42,8 +42,8 @@ var Commands = []Type{
 // Git represents a parsed command received from Git. It may include a
 // subcommand.
 type Git struct {
-	Cmd    Type
-	SubCmd Type // not all commands include a subcommand
+	Cmd    Command
+	SubCmd Command // not all commands include a subcommand
 	Data   []string
 }
 
@@ -53,6 +53,6 @@ func (g *Git) String() string {
 }
 
 // SupportedCommand returns true if a Command is supported.
-func SupportedCommand(name Type) bool {
+func SupportedCommand(name Command) bool {
 	return slices.Contains(Commands, name)
 }

@@ -156,7 +156,7 @@ func parse(ctx context.Context, line string) (Git, error) {
 		}, nil
 	}
 
-	cmd := Type(fields[0])
+	cmd := Command(fields[0])
 	switch cmd {
 	case Capabilities:
 		return Git{
@@ -169,7 +169,7 @@ func parse(ctx context.Context, line string) (Git, error) {
 
 		return Git{
 			Cmd:    Option,
-			SubCmd: Type(fields[1]),
+			SubCmd: Command(fields[1]),
 			Data:   fields[2:],
 		}, nil
 	case List:
@@ -177,7 +177,7 @@ func parse(ctx context.Context, line string) (Git, error) {
 			Cmd: List,
 		}
 		if len(fields) > 1 {
-			res.SubCmd = Type(fields[1])
+			res.SubCmd = Command(fields[1])
 		}
 		return res, nil
 	case Push:

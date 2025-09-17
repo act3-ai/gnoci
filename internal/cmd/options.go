@@ -10,12 +10,12 @@ import (
 
 // https://git-scm.com/docs/gitremote-helpers#_options
 const (
-	Option          Type = "option"
-	OptionVerbosity Type = "verbosity"
+	Option          Command = "option"
+	OptionVerbosity Command = "verbosity"
 )
 
 // Options defines all supported option subcommands.
-var Options = []Type{
+var Options = []Command{
 	Option,
 	OptionVerbosity,
 }

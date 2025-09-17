@@ -18,6 +18,8 @@ const (
 	CapPush   Capability = "push"
 )
 
+// HandleCapabilities executes the capabilities command by listing supported
+// capabilities to Git.
 func HandleCapabilities(ctx context.Context, g Git, w BatchWriter) error {
 	capabilities := []Capability{CapOption, CapFetch, CapPush}
 	slog.DebugContext(ctx, "writing supported capabilities", "capabilities", fmt.Sprintf("%v", capabilities))
