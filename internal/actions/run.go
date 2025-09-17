@@ -42,22 +42,6 @@ func NewGnOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version s
 	}
 }
 
-// localRepo opens the local repository if it hasn't been opened already.
-func (action *GnOCI) localRepo() (*git.Repository, error) {
-	if action.local == nil {
-		if action.gitDir == "" {
-			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
-		}
-		var err error
-		action.local, err = git.PlainOpen(action.gitDir)
-		if err != nil {
-			return nil, fmt.Errorf("opening local repository: %w", err)
-		}
-	}
-
-	return action.local, nil
-}
-
 // Run runs the the primary git-remote-oci action.
 func (action *GnOCI) Run(ctx context.Context) error {
 	// TODO: This is a bit early, but sync.Once seems too much
@@ -72,6 +56,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
 	}
+	defer os.RemoveAll(fstorePath)
 
 	fstore, err := file.New(fstorePath)
 	if err != nil {
@@ -107,7 +92,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 		case cmd.Empty:
 			continue
 		case cmd.Capabilities:
-			// Git shouldn't need to do this again, but let's be safe
+			// Git should only need this once on the first cmd, but here is safer
 			if err := cmd.HandleCapabilities(ctx, gc, action.batcher); err != nil {
 				return fmt.Errorf("running capabilities command: %w", err)
 			}
@@ -116,7 +101,20 @@ func (action *GnOCI) Run(ctx context.Context) error {
 				return fmt.Errorf("running option command: %w", err)
 			}
 		case cmd.List:
-			if err := action.list(ctx, (gc.SubCmd == cmd.ListForPush)); err != nil {
+			var local *git.Repository
+			var err error
+			if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
+				local, err = action.localRepo()
+				if err != nil {
+					return err
+				}
+			}
+			var remote model.Modeler
+			if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+				return err
+			}
+
+			if err := cmd.HandleList(ctx, local, remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
 				return fmt.Errorf("running list command: %w", err)
 			}
 		case cmd.Push:
@@ -163,4 +161,20 @@ func (action *GnOCI) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// localRepo opens the local repository if it hasn't been opened already.
+func (action *GnOCI) localRepo() (*git.Repository, error) {
+	if action.local == nil {
+		if action.gitDir == "" {
+			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
+		}
+		var err error
+		action.local, err = git.PlainOpen(action.gitDir)
+		if err != nil {
+			return nil, fmt.Errorf("opening local repository: %w", err)
+		}
+	}
+
+	return action.local, nil
 }
