@@ -20,7 +20,7 @@ var Options = []Command{
 	OptionVerbosity,
 }
 
-// HandleOption executes an option command received from Git appropriately.
+// HandleOption executes an option command.
 func HandleOption(ctx context.Context, g Git, w Writer) error {
 	const (
 		ok          = "ok"

@@ -116,12 +116,11 @@ func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
 				return false, err
 			}
 		}
-		var remote model.Modeler
 		if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
 			return false, err
 		}
 
-		if err := cmd.HandleList(ctx, local, remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
+		if err := cmd.HandleList(ctx, local, action.remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
 			return false, fmt.Errorf("running list command: %w", err)
 		}
 	case cmd.Push:
@@ -132,7 +131,17 @@ func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
 		}
 		fullBatch := append([]cmd.Git{gc}, batch...)
 
-		if err := action.push(ctx, fullBatch); err != nil {
+		var local *git.Repository
+		if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
+			local, err = action.localRepo()
+			if err != nil {
+				return false, err
+			}
+		}
+		if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+			return false, err
+		}
+		if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.addess, fullBatch, action.batcher); err != nil {
 			return false, fmt.Errorf("running push command: %w", err)
 		}
 	case cmd.Fetch:

@@ -1,4 +1,3 @@
-// Package cmd implements utilities for interpreting and responding to commands sent by Git.
 package cmd
 
 import (
