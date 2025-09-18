@@ -1,21 +1,21 @@
-package actions
+package cmd
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
 
-	"github.com/act3-ai/gnoci/internal/cmd"
+	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/opencontainers/go-digest"
 )
 
-// TODO: look into the keep file lock stuff
-
-func (action *GnOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
-	if err := action.remote.Fetch(ctx, action.addess); err != nil {
+// HandleFetch executes a batch of fetch commands.
+func HandleFetch(ctx context.Context, local *git.Repository, remote model.Modeler, remoteAddress string, cmds []Git, w Writer) error {
+	if err := remote.Fetch(ctx, remoteAddress); err != nil {
 		return fmt.Errorf("fetching remote metadata: %w", err)
 	}
 
@@ -28,7 +28,7 @@ func (action *GnOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 		}
 		// fetchRefs = append(fetchRefs, ref)
 
-		_, layer, err := action.remote.ResolveRef(ctx, plumbing.ReferenceName(ref.Name().String()))
+		_, layer, err := remote.ResolveRef(ctx, plumbing.ReferenceName(ref.Name().String()))
 		if err != nil {
 			return fmt.Errorf("resolving remote reference OCI layer: %w", err)
 		}
@@ -37,10 +37,10 @@ func (action *GnOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 
 	// resolve digests into full descriptors
 	// TODO: we should parallelize this, but we don't yet know how safe this
-	// is to do concurrently
+	// is to do concurrently, consider locking the packfile.UpdateObjectStorage.
 	for dgst := range packLayers {
 		slog.DebugContext(ctx, "fetching packfile", "layerDigest", dgst)
-		rc, err := action.remote.FetchLayer(ctx, dgst)
+		rc, err := remote.FetchLayer(ctx, dgst)
 		if err != nil {
 			return fmt.Errorf("fetching packfile layer: %w", err)
 		}
@@ -49,11 +49,7 @@ func (action *GnOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 		// TODO: we may want to use packfile.WritePackfileToObjectStorage directly
 		// what's the difference here? writing the objects themselves rather than the
 		// entire packfile? If the objects already exist in another packfile will they be duplicated?
-		repo, err := action.localRepo()
-		if err != nil {
-			return err
-		}
-		st, ok := repo.Storer.(storer.Storer)
+		st, ok := local.Storer.(storer.Storer)
 		if !ok {
 			return fmt.Errorf("repository storer is not a storer.Storer")
 		}
@@ -67,7 +63,7 @@ func (action *GnOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 	}
 	slog.InfoContext(ctx, "done fetching packfiles")
 
-	if err := action.batcher.Flush(true); err != nil {
+	if err := w.Flush(true); err != nil {
 		return fmt.Errorf("writing newline to git after fetch: %w", err)
 	}
 
@@ -77,7 +73,7 @@ func (action *GnOCI) fetch(ctx context.Context, cmds []cmd.Git) error {
 }
 
 // parseFetch parses a fetch command received from Git, returning it as a go-git reference.
-func parseFetch(c cmd.Git) (*plumbing.Reference, error) {
+func parseFetch(c Git) (*plumbing.Reference, error) {
 	if len(c.Data) < 2 {
 		return nil, fmt.Errorf("insufficient number of arguments in fetch command got %d, expected 2", len(c.Data))
 	}

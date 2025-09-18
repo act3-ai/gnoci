@@ -131,13 +131,11 @@ func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
 		}
 		fullBatch := append([]cmd.Git{gc}, batch...)
 
-		var local *git.Repository
-		if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
-			local, err = action.localRepo()
-			if err != nil {
-				return false, err
-			}
+		local, err := action.localRepo()
+		if err != nil {
+			return false, err
 		}
+
 		if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
 			return false, err
 		}
@@ -151,7 +149,12 @@ func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
 		}
 		fullBatch := append([]cmd.Git{gc}, batch...)
 
-		if err := action.fetch(ctx, fullBatch); err != nil {
+		local, err := action.localRepo()
+		if err != nil {
+			return false, err
+		}
+
+		if err := cmd.HandleFetch(ctx, local, action.remote, action.addess, fullBatch, action.batcher); err != nil {
 			return false, fmt.Errorf("running fetch command: %w", err)
 		}
 	default:
