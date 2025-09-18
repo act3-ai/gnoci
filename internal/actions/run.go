@@ -101,61 +101,23 @@ func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
 	case cmd.Capabilities:
 		// Git should only need this once on the first cmd, but here is safer
 		if err := cmd.HandleCapabilities(ctx, gc, action.batcher); err != nil {
-			return false, fmt.Errorf("running capabilities command: %w", err)
+			return false, fmt.Errorf("handling capabilities command: %w", err)
 		}
 	case cmd.Option:
 		if err := cmd.HandleOption(ctx, gc, action.batcher); err != nil {
-			return false, fmt.Errorf("running option command: %w", err)
+			return false, fmt.Errorf("handling option command: %w", err)
 		}
 	case cmd.List:
-		var local *git.Repository
-		var err error
-		if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
-			local, err = action.localRepo()
-			if err != nil {
-				return false, err
-			}
-		}
-		if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
-			return false, err
-		}
-
-		if err := cmd.HandleList(ctx, local, action.remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
-			return false, fmt.Errorf("running list command: %w", err)
+		if err := action.handleList(ctx, gc); err != nil {
+			return false, fmt.Errorf("handling list command: %w", err)
 		}
 	case cmd.Push:
-		// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
-		batch, err := action.batcher.ReadBatch(ctx)
-		if err != nil {
-			return false, fmt.Errorf("reading push batch: %w", err)
-		}
-		fullBatch := append([]cmd.Git{gc}, batch...)
-
-		local, err := action.localRepo()
-		if err != nil {
-			return false, err
-		}
-
-		if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
-			return false, err
-		}
-		if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.addess, fullBatch, action.batcher); err != nil {
-			return false, fmt.Errorf("running push command: %w", err)
+		if err := action.handlePush(ctx, gc); err != nil {
+			return false, fmt.Errorf("handling push command batch: %w", err)
 		}
 	case cmd.Fetch:
-		batch, err := action.batcher.ReadBatch(ctx)
-		if err != nil {
-			return false, fmt.Errorf("reading fetch batch: %w", err)
-		}
-		fullBatch := append([]cmd.Git{gc}, batch...)
-
-		local, err := action.localRepo()
-		if err != nil {
-			return false, err
-		}
-
-		if err := cmd.HandleFetch(ctx, local, action.remote, action.addess, fullBatch, action.batcher); err != nil {
-			return false, fmt.Errorf("running fetch command: %w", err)
+		if err := action.handleFetch(ctx, gc); err != nil {
+			return false, fmt.Errorf("handling fetch command batch: %w", err)
 		}
 	default:
 		return false, fmt.Errorf("%w: %s", cmd.ErrUnsupportedCommand, gc.String())
@@ -178,4 +140,68 @@ func (action *GnOCI) localRepo() (*git.Repository, error) {
 	}
 
 	return action.local, nil
+}
+
+func (action *GnOCI) handleList(ctx context.Context, gc cmd.Git) error {
+	var local *git.Repository
+	var err error
+	if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
+		local, err = action.localRepo()
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+		return err
+	}
+
+	if err := cmd.HandleList(ctx, local, action.remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
+		return fmt.Errorf("running list command: %w", err)
+	}
+
+	return nil
+}
+
+func (action *GnOCI) handlePush(ctx context.Context, gc cmd.Git) error {
+	// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
+	batch, err := action.batcher.ReadBatch(ctx)
+	if err != nil {
+		return fmt.Errorf("reading push batch: %w", err)
+	}
+	fullBatch := append([]cmd.Git{gc}, batch...)
+
+	local, err := action.localRepo()
+	if err != nil {
+		return err
+	}
+
+	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+		return err
+	}
+
+	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.addess, fullBatch, action.batcher); err != nil {
+		return fmt.Errorf("running push commands: %w", err)
+	}
+
+	return nil
+}
+
+func (action *GnOCI) handleFetch(ctx context.Context, gc cmd.Git) error {
+	batch, err := action.batcher.ReadBatch(ctx)
+	if err != nil {
+		return fmt.Errorf("reading fetch batch: %w", err)
+	}
+	fullBatch := append([]cmd.Git{gc}, batch...)
+
+	local, err := action.localRepo()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.HandleFetch(ctx, local, action.remote, action.addess, fullBatch, action.batcher); err != nil {
+		return fmt.Errorf("running fetch command: %w", err)
+	}
+
+	return nil
 }
