@@ -1,3 +1,4 @@
+// Package refcomp provides utilities for comparing local and remote git references.
 package refcomp
 
 import (
