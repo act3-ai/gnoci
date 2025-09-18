@@ -1,4 +1,3 @@
-// Package cmd implements utilities for interpreting and responding to commands sent by Git.
 package cmd
 
 import (
@@ -7,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 )
 
 // BatchReadWriter supports both reading from and writing to Git in batches.
@@ -143,4 +143,59 @@ func (b *batcher) Flush(blankLine bool) error {
 	}
 
 	return nil
+}
+
+// parse parses a single line received from Git, turning it into a cmd.Git
+// easily identified by Type.
+func parse(ctx context.Context, line string) (Git, error) {
+	fields := strings.Fields(line)
+	if len(fields) < 1 {
+		return Git{
+			Cmd: Empty,
+		}, nil
+	}
+
+	cmd := Command(fields[0])
+	switch cmd {
+	case Capabilities:
+		return Git{
+			Cmd: Capabilities,
+		}, nil
+	case Option:
+		if err := validOption(ctx, fields...); err != nil {
+			return Git{}, err
+		}
+
+		return Git{
+			Cmd:    Option,
+			SubCmd: Command(fields[1]),
+			Data:   fields[2:],
+		}, nil
+	case List:
+		res := Git{
+			Cmd: List,
+		}
+		if len(fields) > 1 {
+			res.SubCmd = Command(fields[1])
+		}
+		return res, nil
+	case Push:
+		if len(fields) < 2 {
+			return Git{}, fmt.Errorf("insufficient args for push command")
+		}
+		return Git{
+			Cmd:  Push,
+			Data: fields[1:],
+		}, nil
+	case Fetch:
+		if len(fields) < 2 {
+			return Git{}, fmt.Errorf("insufficient args for fetch command")
+		}
+		return Git{
+			Cmd:  Fetch,
+			Data: fields[1:],
+		}, nil
+	default:
+		return Git{}, fmt.Errorf("%w: %s", ErrUnsupportedCommand, cmd)
+	}
 }

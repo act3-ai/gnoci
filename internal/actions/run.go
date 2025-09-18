@@ -1,9 +1,11 @@
+// Package actions holds actions called by the root git-remote-oci command.
 package actions
 
 import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -28,8 +30,6 @@ type GnOCI struct {
 	addess string
 	remote model.Modeler
 
-	Option
-
 	version string
 }
 
@@ -42,6 +42,89 @@ func NewGnOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version s
 		addess:  strings.TrimPrefix(address, "oci://"),
 		version: version,
 	}
+}
+
+// Run runs the the primary git-remote-oci action.
+func (action *GnOCI) Run(ctx context.Context) error {
+	// TODO: This is a bit early, but sync.Once seems too much
+	// TODO: The next 5 "sections" are alot of setup that should be condensed
+	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
+	if err != nil {
+		return fmt.Errorf("initializing remote graph target: %w", err)
+	}
+
+	tmpDir := os.TempDir()
+	fstorePath, err := os.MkdirTemp(tmpDir, "GnOCI-fstore-*")
+	if err != nil {
+		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(fstorePath); err != nil {
+			slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
+		}
+	}()
+
+	fstore, err := file.New(fstorePath)
+	if err != nil {
+		return fmt.Errorf("initializing OCI filestore: %w", err)
+	}
+	defer func() {
+		if err := fstore.Close(); err != nil {
+			slog.ErrorContext(ctx, "closing OCI file store", slog.String("error", err.Error()))
+		}
+	}()
+
+	action.remote = model.NewModeler(fstore, gt)
+
+	var done bool
+	for !done {
+		done, err = action.handleCmd(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// handleCmd returns true, nil if command handling is complete.
+func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
+	gc, err := action.batcher.Read(ctx)
+	if err != nil {
+		return false, fmt.Errorf("reading next line: %w", err)
+	}
+
+	switch gc.Cmd {
+	case cmd.Done:
+		return true, nil
+	case cmd.Empty:
+		return false, nil
+	case cmd.Capabilities:
+		// Git should only need this once on the first cmd, but here is safer
+		if err := cmd.HandleCapabilities(ctx, gc, action.batcher); err != nil {
+			return false, fmt.Errorf("handling capabilities command: %w", err)
+		}
+	case cmd.Option:
+		if err := cmd.HandleOption(ctx, gc, action.batcher); err != nil {
+			return false, fmt.Errorf("handling option command: %w", err)
+		}
+	case cmd.List:
+		if err := action.handleList(ctx, gc); err != nil {
+			return false, fmt.Errorf("handling list command: %w", err)
+		}
+	case cmd.Push:
+		if err := action.handlePush(ctx, gc); err != nil {
+			return false, fmt.Errorf("handling push command batch: %w", err)
+		}
+	case cmd.Fetch:
+		if err := action.handleFetch(ctx, gc); err != nil {
+			return false, fmt.Errorf("handling fetch command batch: %w", err)
+		}
+	default:
+		return false, fmt.Errorf("%w: %s", cmd.ErrUnsupportedCommand, gc.String())
+	}
+
+	return false, nil
 }
 
 // localRepo opens the local repository if it hasn't been opened already.
@@ -60,108 +143,65 @@ func (action *GnOCI) localRepo() (*git.Repository, error) {
 	return action.local, nil
 }
 
-// Run runs the the primary git-remote-oci action.
-func (action *GnOCI) Run(ctx context.Context) error {
-	// TODO: This is a bit early, but sync.Once seems too much
-	// TODO: The next 5 "sections" are alot of setup that should be condensed
-	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
-	if err != nil {
-		return fmt.Errorf("initializing remote graph target: %w", err)
-	}
-
-	tmpDir := os.TempDir()
-	fstorePath, err := os.MkdirTemp(tmpDir, "GnOCI-fstore-*")
-	if err != nil {
-		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
-	}
-
-	fstore, err := file.New(fstorePath)
-	if err != nil {
-		return fmt.Errorf("initializing OCI filestore: %w", err)
-	}
-	defer fstore.Close()
-
-	action.remote = model.NewModeler(fstore, gt)
-
-	// first command is always "capabilities"
-	c, err := action.batcher.Read(ctx)
-	switch {
-	case err != nil:
-		return fmt.Errorf("reading initial command: %w", err)
-	case c.Cmd != cmd.Capabilities:
-		return fmt.Errorf("unexpected first command %s, expected 'capabilities'", c.Cmd)
-	default:
-		if err := action.capabilities(ctx); err != nil {
+func (action *GnOCI) handleList(ctx context.Context, gc cmd.Git) error {
+	var local *git.Repository
+	var err error
+	if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
+		local, err = action.localRepo()
+		if err != nil {
 			return err
 		}
 	}
 
-	var done bool
-	for !done {
-		c, err := action.batcher.Read(ctx)
-		if err != nil {
-			return fmt.Errorf("reading next line: %w", err)
-		}
-
-		switch c.Cmd {
-		case cmd.Done:
-			done = true
-		case cmd.Empty:
-			continue
-		case cmd.Capabilities:
-			// Git shouldn't need to do this again, but let's be safe
-			if err := action.capabilities(ctx); err != nil {
-				return fmt.Errorf("running capabilities command: %w", err)
-			}
-		case cmd.Option:
-			if err := action.option(ctx, c); err != nil {
-				return fmt.Errorf("running option command: %w", err)
-			}
-		case cmd.List:
-			if err := action.list(ctx, (c.SubCmd == cmd.ListForPush)); err != nil {
-				return fmt.Errorf("running list command: %w", err)
-			}
-		case cmd.Push:
-			// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
-			batch, err := action.batcher.ReadBatch(ctx)
-			if err != nil {
-				return fmt.Errorf("reading push batch: %w", err)
-			}
-			fullBatch := append([]cmd.Git{c}, batch...)
-
-			if err := action.push(ctx, fullBatch); err != nil {
-				return fmt.Errorf("running push command: %w", err)
-			}
-		case cmd.Fetch:
-			batch, err := action.batcher.ReadBatch(ctx)
-			if err != nil {
-				return fmt.Errorf("reading fetch batch: %w", err)
-			}
-			fullBatch := append([]cmd.Git{c}, batch...)
-
-			if err := action.fetch(ctx, fullBatch); err != nil {
-				return fmt.Errorf("running fetch command: %w", err)
-			}
-		default:
-			return fmt.Errorf("default case hit")
-		}
+	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+		return err
 	}
 
-	// // TODO: Next command is 'list', can be read in a batch
-	// slog.InfoContext(ctx, "reading batch")
-	// _, err = action.batcher.ReadBatch(ctx)
-	// if err != nil {
-	// 	return fmt.Errorf("reading batch input: %w", err)
-	// }
-
-	// TODO: not a fan of this pattern, but it's nice to catch the errors...
-	// ideally we "do our best to cleanup"
-	if err := fstore.Close(); err != nil {
-		return fmt.Errorf("closing OCI file store: %w", err)
+	if err := cmd.HandleList(ctx, local, action.remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
+		return fmt.Errorf("running list command: %w", err)
 	}
 
-	if err := os.RemoveAll(fstorePath); err != nil {
-		return fmt.Errorf("cleaning up temporary files: %w", err)
+	return nil
+}
+
+func (action *GnOCI) handlePush(ctx context.Context, gc cmd.Git) error {
+	// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
+	batch, err := action.batcher.ReadBatch(ctx)
+	if err != nil {
+		return fmt.Errorf("reading push batch: %w", err)
+	}
+	fullBatch := append([]cmd.Git{gc}, batch...)
+
+	local, err := action.localRepo()
+	if err != nil {
+		return err
+	}
+
+	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+		return err
+	}
+
+	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.addess, fullBatch, action.batcher); err != nil {
+		return fmt.Errorf("running push commands: %w", err)
+	}
+
+	return nil
+}
+
+func (action *GnOCI) handleFetch(ctx context.Context, gc cmd.Git) error {
+	batch, err := action.batcher.ReadBatch(ctx)
+	if err != nil {
+		return fmt.Errorf("reading fetch batch: %w", err)
+	}
+	fullBatch := append([]cmd.Git{gc}, batch...)
+
+	local, err := action.localRepo()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.HandleFetch(ctx, local, action.remote, action.addess, fullBatch, action.batcher); err != nil {
+		return fmt.Errorf("running fetch command: %w", err)
 	}
 
 	return nil
