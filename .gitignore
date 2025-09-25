@@ -12,3 +12,4 @@
 
 /.env*
 /ci-dist/
+Taskfile.yaml
