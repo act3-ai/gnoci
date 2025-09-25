@@ -2,6 +2,7 @@
 
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/act3-ai/gnoci)
 [![dagger](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml/badge.svg)](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/act3-ai/gnoci)](https://goreportcard.com/report/github.com/act3-ai/gnoci)
 ![License](https://img.shields.io/github/license/act3-ai/gnoci)
 
 Pronounced as [gnocchi](https://www.merriam-webster.com/dictionary/gnocchi).
