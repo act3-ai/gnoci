@@ -4,7 +4,6 @@
 [![dagger](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml/badge.svg)](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml)
 ![License](https://img.shields.io/github/license/act3-ai/gnoci)
 
-
 Pronounced as [gnocchi](https://www.merriam-webster.com/dictionary/gnocchi).
 
 This project has two main objectives:
@@ -37,6 +36,10 @@ Why use OCI registries as remote storage for Git repositories?
 Existing tools, such as [Zarf](https://zarf.dev/) and the [ASCE Data Tool](https://github.com/act3-ai/data-tool), provide solutions for moving OCI images and artifacts across air-gapped environments. The primary use-case for the `oci` remote helper protocol is to efficiently transfer and store Git repositories in OCI registries to complement the air-gap capabilities of these tools.
 
 For more information see the [project proposal](./docs/proposal/proposal.md).
+
+## Code Coverage
+
+![Coverage](https://raw.githubusercontent.com/act3-ai/gnoci/main-coverage/coverage.svg)
 
 ## Documentation
 

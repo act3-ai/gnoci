@@ -16,6 +16,8 @@ jobs:
         uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"
+      - name: Build
+        run: dagger call build-platforms
             
       - name: Lint
         run: dagger call lint all
@@ -23,5 +25,16 @@ jobs:
       - name: Test
         run: dagger call test all
     
-      - name: Build
-        run: dagger call build-platforms
+      - name: Coverage
+        if: github.event_name == 'push'
+        run: |
+          dagger -c 'test | coverage-tree-map -- $(test | coverage) | export -- coverage-treemap.svg'
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git fetch origin main-coverage || true
+          git checkout main-coverage || git checkout --orphan main-coverage
+
+          git add coverage.svg
+          git commit -m "Update coverage badge" || echo "No changes to commit"
+          git push origin main-coverage
