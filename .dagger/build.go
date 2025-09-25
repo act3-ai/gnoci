@@ -24,11 +24,7 @@ func (g *Gnoci) Build(ctx context.Context,
 	// +default="linux/amd64"
 	platform dagger.Platform,
 ) *dagger.File {
-	// trim source for better caching
-	src := g.Source.Filter(dagger.DirectoryFilterOpts{
-		Exclude: []string{"**/*_test.go"},
-		Include: []string{"**/*.go", "go.mod", "go.sum"},
-	})
+	src := g.dirFilterGo(g.Source)
 
 	ldflags := []string{"-s", "-w", `-extldflags "-static"`}
 	if version != "" {
@@ -87,5 +83,14 @@ func (g *Gnoci) goWithSource(src *dagger.Directory) *dagger.GoWithSource {
 	return dag.Go().
 		WithSource(src).
 		WithCgoDisabled().
-		WithEnvVariable("GOFIPS140", "latest")
+		WithEnvVariable("GOFIPS140", "latest").
+		WithEnvVariable("GOBIN", "/work/src/bin")
+}
+
+// dirFilterGo filters a directory to include only go files.
+func (g *Gnoci) dirFilterGo(d *dagger.Directory) *dagger.Directory {
+	return d.Filter(dagger.DirectoryFilterOpts{
+		Exclude: []string{"**/*_test.go"},
+		Include: []string{"**/*.go", "go.mod", "go.sum"},
+	})
 }

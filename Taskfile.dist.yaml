@@ -4,8 +4,15 @@ version: 3
 
 tasks:
   build-to-path:
-    desc: "Build from source"
+    desc: "Build from source."
     env:
       GNOCI_BUILD_PATH: bin/git-remote-oci
     cmds:
       - dagger call build export --path {{ .GNOCI_BUILD_PATH }}
+
+  cover-treemap:
+    desc: "Generage code coverage treemap, a visual aid."
+    env:
+      OUTPUT: bin/coverage-treemap.svg
+    cmds:
+      - dagger -c 'test | coverage-tree-map -- $(test | coverage) | export -- coverage-treemap.svg'
