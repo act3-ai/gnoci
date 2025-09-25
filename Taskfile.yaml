@@ -1,0 +1,11 @@
+# https://taskfile.dev
+
+version: 3
+
+tasks:
+  build-to-path:
+    desc: "Build from source"
+    env:
+      GNOCI_BUILD_PATH: bin/git-remote-oci
+    cmds:
+      - dagger call build export --path {{ .GNOCI_BUILD_PATH }}
