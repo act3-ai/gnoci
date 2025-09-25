@@ -43,8 +43,8 @@ type Modeler interface {
 	FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
 	// Push uploads the Git OCI data model in its current state.
 	Push(ctx context.Context, ociRemote string) (ocispec.Descriptor, error)
-	// AddPack adds a packfile as a layer to the Git OCI data model. refs are the
-	// updated remote references.
+	// AddPack adds a packfile as a layer to the Git OCI data model and updates
+	// the remote references whose objs are included in the packfile.
 	AddPack(ctx context.Context, path string, refs ...*plumbing.Reference) (ocispec.Descriptor, error)
 	// UpdateRef updates a Git reference and the object it points to in the
 	// Git OCI data model. Useful for updating a reference where its object
