@@ -1,5 +1,10 @@
 # Git o(n) OCI (gnoci)
 
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/act3-ai/gnoci)
+[![dagger](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml/badge.svg)](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml)
+![License](https://img.shields.io/github/license/act3-ai/gnoci)
+
+
 Pronounced as [gnocchi](https://www.merriam-webster.com/dictionary/gnocchi).
 
 This project has two main objectives:
@@ -13,7 +18,7 @@ A full specification is in progress. Please refer to the prototype [data model](
 
 ## Git Remote Helper for OCI Registries
 
-> [!WARNING]  
+> [!WARNING]
 > `git-remote-oci` is in early stages of development. Bugs are present, and inefficiencies are known to exist.
 
 `git-remote-oci` is a Git remote helper that implements a custom protocol for interacting with Git repositories stored in OCI compliant registries. It is designed to allow users to interact with `git` as they normally do in their day-to-day workflows, but use an OCI registry as remote storage.
