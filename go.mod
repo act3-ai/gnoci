@@ -38,7 +38,7 @@ require (
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1 // indirect
-	github.com/adrg/xdg v0.5.2
+	github.com/adrg/xdg v0.5.3
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
