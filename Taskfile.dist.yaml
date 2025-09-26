@@ -26,6 +26,7 @@ tasks:
 
         COVERAGE=$(go tool cover -func=docs/figures/badges/coverage.out | grep total | awk '{print $3}' | sed 's/%//')
 
+        rm docs/figures/badges/coverage.svg
         anybadge --label=coverage --value=$COVERAGE \
           --file=docs/figures/badges/coverage.svg \
           50=red 80=yellow 100=green
