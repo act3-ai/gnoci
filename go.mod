@@ -5,7 +5,7 @@ go 1.24.4
 require (
 	github.com/act3-ai/go-common v0.0.0-20250519210101-950b1bb97e92
 	github.com/go-git/go-git/v5 v5.16.2
-	github.com/muesli/termenv v0.15.2
+	github.com/muesli/termenv v0.16.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.11.1
