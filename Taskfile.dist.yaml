@@ -10,9 +10,22 @@ tasks:
     cmds:
       - dagger call build export --path {{ .GNOCI_BUILD_PATH }}
 
-  cover-treemap:
+  coverage:
     desc: "Generage code coverage treemap, a visual aid."
     env:
-      OUTPUT: bin/coverage-treemap.svg
+      OUTPUT: coverage-treemap.svg
     cmds:
       - dagger -c 'test | coverage-tree-map -- $(test | coverage) | export -- coverage-treemap.svg'
+
+  coverage-docs:
+    desc: "Generate code coverage badge and treemap for README.md docs."
+    cmds:
+      - |
+        dagger -c 'test | coverage | export -- docs/figures/badges/coverage.out'
+        dagger -c 'test | coverage-tree-map -- docs/figures/badges/coverage.out | export -- docs/figures/badges/coverage-treemap.svg'
+
+        COVERAGE=$(go tool cover -func=docs/figures/badges/coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+
+        anybadge --label=coverage --value=$COVERAGE \
+          --file=docs/figures/badges/coverage.svg \
+          50=red 80=yellow 100=green

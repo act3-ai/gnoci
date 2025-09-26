@@ -182,6 +182,8 @@ prepare() {
         --changelog-path="$changelog_path" \
         export --path="."
 
+    # TODO: generage coverage badges
+
     echo "Successfully ran prepare stage."
     echo "Please review the local changes, especially releases/$vVersion.md"
     if [ "$interactive" = "true" ] && [ "$(prompt_continue "approve")" = "true" ]; then
