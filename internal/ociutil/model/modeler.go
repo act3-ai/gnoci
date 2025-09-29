@@ -9,8 +9,8 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"slices"
 
-	"github.com/act3-ai/gnoci/internal/ociutil"
 	"github.com/act3-ai/gnoci/pkg/oci"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -28,6 +28,8 @@ var (
 	ErrUnsupportedReferenceType = errors.New("unsupported reference type")
 	// ErrReferenceNotFound indicates a reference does not exist in the OCI remote.
 	ErrReferenceNotFound = errors.New("reference not found in remote data model")
+	// errLayerNotInManifest indicates a specified layer digest does not exist in the Git manifest.
+	errLayerNotInManifest = errors.New("layer not found for digest")
 )
 
 // Modeler allows for fetching, updating, and pushing a Git OCI data model to
@@ -100,19 +102,14 @@ func (m *model) Fetch(ctx context.Context, ociRemote string) error {
 		return nil
 	}
 
-	gt, err := ociutil.NewGraphTarget(ctx, ociRemote)
-	if err != nil {
-		return err
-	}
-
 	slog.DebugContext(ctx, "resolving manifest descriptor")
-	manDesc, err := gt.Resolve(ctx, ociRemote)
+	manDesc, err := m.gt.Resolve(ctx, ociRemote)
 	if err != nil {
 		return fmt.Errorf("resolving manifest descriptor: %w", err)
 	}
 
 	slog.DebugContext(ctx, "fetching manifest")
-	manRaw, err := content.FetchAll(ctx, gt, manDesc)
+	manRaw, err := content.FetchAll(ctx, m.gt, manDesc)
 	if err != nil {
 		return fmt.Errorf("fetching manifest: %w", err)
 	}
@@ -122,7 +119,7 @@ func (m *model) Fetch(ctx context.Context, ociRemote string) error {
 	}
 
 	slog.DebugContext(ctx, "fetching config")
-	cfgRaw, err := content.FetchAll(ctx, gt, m.man.Config)
+	cfgRaw, err := content.FetchAll(ctx, m.gt, m.man.Config)
 	if err != nil {
 		return fmt.Errorf("fetching config: %w", err)
 	}
@@ -132,6 +129,7 @@ func (m *model) Fetch(ctx context.Context, ociRemote string) error {
 	}
 
 	m.sortRefsByLayer()
+	m.fetched = true
 
 	return nil
 }
@@ -151,6 +149,7 @@ func (m *model) FetchOrDefault(ctx context.Context, ociRemote string) error {
 			// annotations set on push
 		}
 		m.refsByLayer = map[digest.Digest][]plumbing.Hash{}
+		m.fetched = true
 		return nil
 	case err != nil:
 		return fmt.Errorf("fetching remote metadata: %w", err)
@@ -160,6 +159,7 @@ func (m *model) FetchOrDefault(ctx context.Context, ociRemote string) error {
 }
 
 func (m *model) FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+	// TODO: reverse iter? it is more likely we'll want to fetch newer layers
 	for _, desc := range m.man.Layers {
 		if desc.Digest == dgst {
 			rc, err := m.gt.Fetch(ctx, desc)
@@ -169,7 +169,7 @@ func (m *model) FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadClos
 			return rc, nil
 		}
 	}
-	return nil, fmt.Errorf("layer not found for digest %s", dgst.String())
+	return nil, fmt.Errorf("%w: %s", errLayerNotInManifest, dgst.String())
 }
 
 func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error) {
@@ -179,6 +179,7 @@ func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error
 	// comes before the copy
 
 	for _, desc := range m.newPacks {
+		// TODO: CopyGraph is too large of a hammer, less efficient.
 		slog.DebugContext(ctx, "pushing packfile", "digest", desc.Digest.String())
 		if err := oras.CopyGraph(ctx, m.fstore, m.gt, desc, oras.DefaultCopyGraphOptions); err != nil {
 			return ocispec.Descriptor{}, fmt.Errorf("copying packfile layer to target repository: %w", err)
@@ -237,7 +238,22 @@ func (m *model) AddPack(ctx context.Context, path string, refs ...*plumbing.Refe
 }
 
 func (m *model) UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error {
+	// assuming it's more likely to be updating refs in recent layers
+	// TODO: can we use m.refsByLayer to avoid traversing the layer slice each call?
+	// really, this is for our sanity and may be better covered by a functional test.
+	// In the end, our goal is to not push a Git artifact with a reference to an object
+	// that is not included in any packfiles.
+	var found bool
+	for _, desc := range slices.Backward(m.man.Layers) {
+		if desc.Digest == ociLayer {
+			found = true
+			break
+		}
+	}
+
 	switch {
+	case !found:
+		return fmt.Errorf("%w: %s", errLayerNotInManifest, ociLayer.String())
 	case ref.Name().IsBranch():
 		m.cfg.Heads[ref.Name()] = oci.ReferenceInfo{Commit: ref.Hash().String(), Layer: ociLayer}
 		return nil
@@ -310,12 +326,23 @@ func (m *model) CommitExists(localRepo *git.Repository, commit *object.Commit) (
 // sortRefsByLayer organizes the refs in the current config by layer,
 // updating model with a map of layer digests to a slice of commit hashes contained in that layer.
 func (m *model) sortRefsByLayer() {
+	// deduplicate references to the same commit
+	seen := make(map[string]struct{}, len(m.man.Layers))
+
 	m.refsByLayer = make(map[digest.Digest][]plumbing.Hash) // layer digest : []commits
 	for _, info := range m.cfg.Heads {
-		m.refsByLayer[info.Layer] = append(m.refsByLayer[info.Layer], plumbing.NewHash(info.Commit))
+		key := info.Layer.String() + info.Commit
+		if _, ok := seen[key]; !ok {
+			m.refsByLayer[info.Layer] = append(m.refsByLayer[info.Layer], plumbing.NewHash(info.Commit))
+			seen[key] = struct{}{}
+		}
 	}
 	for _, info := range m.cfg.Tags {
-		m.refsByLayer[info.Layer] = append(m.refsByLayer[info.Layer], plumbing.NewHash(info.Commit))
+		key := info.Layer.String() + info.Commit
+		if _, ok := seen[key]; !ok {
+			m.refsByLayer[info.Layer] = append(m.refsByLayer[info.Layer], plumbing.NewHash(info.Commit))
+			seen[key] = struct{}{}
+		}
 	}
 }
 
