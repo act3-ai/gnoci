@@ -30,3 +30,11 @@ tasks:
         anybadge --label=coverage --value=$COVERAGE \
           --file=docs/figures/badges/coverage.svg \
           50=red 80=yellow 100=green
+  
+  go-generate:
+    desc: "Run go generate."
+    sources:
+      - "*.go"
+      - "**/*.go"
+    cmds:
+      - go generate ./...
