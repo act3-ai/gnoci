@@ -7,14 +7,10 @@ import (
 	"io"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -1006,34 +1002,34 @@ func Test_model_DeleteRef(t *testing.T) {
 }
 
 // addCommit is a helper function for creating a git commit in a test repository.
-func addCommit(t *testing.T, dir string, repo *git.Repository, randData string) *object.Commit {
-	t.Helper()
+// func addCommit(t *testing.T, dir string, repo *git.Repository, randData string) *object.Commit {
+// 	t.Helper()
 
-	w, err := repo.Worktree()
-	assert.NoError(t, err)
+// 	w, err := repo.Worktree()
+// 	assert.NoError(t, err)
 
-	filename := filepath.Join(dir, "example-git-file")
-	err = os.WriteFile(filename, []byte(randData), 0644)
-	assert.NoError(t, err)
+// 	filename := filepath.Join(dir, "example-git-file")
+// 	err = os.WriteFile(filename, []byte(randData), 0644)
+// 	assert.NoError(t, err)
 
-	_, err = w.Add("example-git-file")
-	assert.NoError(t, err)
+// 	_, err = w.Add("example-git-file")
+// 	assert.NoError(t, err)
 
-	commit, err := w.Commit("test commit", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "John Doe",
-			Email: "john@doe.org",
-			When:  time.Now(),
-		},
-	})
+// 	commit, err := w.Commit("test commit", &git.CommitOptions{
+// 		Author: &object.Signature{
+// 			Name:  "John Doe",
+// 			Email: "john@doe.org",
+// 			When:  time.Now(),
+// 		},
+// 	})
 
-	assert.NoError(t, err)
+// 	assert.NoError(t, err)
 
-	commitHash, err := repo.CommitObject(commit)
-	assert.NoError(t, err)
+// 	commitHash, err := repo.CommitObject(commit)
+// 	assert.NoError(t, err)
 
-	return commitHash
-}
+// 	return commitHash
+// }
 
 // TODO: finish me
 // func Test_model_CommitExists(t *testing.T) {
