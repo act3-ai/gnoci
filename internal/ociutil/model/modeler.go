@@ -69,10 +69,6 @@ type Modeler interface {
 	// AddLFSFile(path string) (ocispec.Descriptor, error)
 }
 
-// fetcher
-// pusher
-// updater
-
 // NewModeler initializes a new modeler.
 func NewModeler(fstore *file.Store, gt oras.GraphTarget) Modeler {
 	return &model{
