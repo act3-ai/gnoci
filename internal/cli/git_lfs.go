@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"os"
-
 	"github.com/act3-ai/gnoci/internal/actions"
 	"github.com/spf13/cobra"
 )
@@ -14,16 +12,9 @@ func NewGitLFSCLI(version string) *cobra.Command {
 		Use:          "git-lfs-remote-oci REPOSITORY [URL]",
 		Short:        "A git-lfs remote helper for syncing git-lfs files in OCI Registries.",
 		SilenceUsage: true,
-		Args:         cobra.RangeArgs(1, 2),
+		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// https://git-scm.com/docs/gitremote-helpers#_invocation
-			name := args[0]
-			address := name
-			if len(args) > 1 {
-				address = args[1]
-			}
-
-			action := actions.NewGitLFS(cmd.InOrStdin(), cmd.OutOrStdout(), os.Getenv("GIT_DIR"), name, address, version)
+			action := actions.NewGitLFS(cmd.InOrStdin(), cmd.OutOrStdout(), version)
 			return action.Run(cmd.Context())
 		},
 	}

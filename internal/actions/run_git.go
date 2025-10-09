@@ -9,6 +9,9 @@ import (
 	"os"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	"oras.land/oras-go/v2/registry"
+
 	"github.com/act3-ai/gnoci/internal/cmd"
 	"github.com/act3-ai/gnoci/internal/ociutil"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
@@ -16,9 +19,6 @@ import (
 	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
 	"github.com/act3-ai/go-common/pkg/config"
 	"github.com/go-git/go-git/v5"
-	"k8s.io/apimachinery/pkg/runtime"
-	"oras.land/oras-go/v2/content/file"
-	"oras.land/oras-go/v2/registry"
 )
 
 // Git represents the base action.
@@ -65,43 +65,22 @@ func (action *Git) Run(ctx context.Context) error {
 		return fmt.Errorf("invalid reference %s: %w", action.address, err)
 	}
 
-	opts := repoOptsFromConfig(parsedRef.Host(), cfg)
-
-	slog.DebugContext(ctx, "loaded repository options from configuration",
-		slog.String("userAgent", opts.UserAgent),
-		slog.Bool("plainHTTP", opts.PlainHTTP),
-		slog.Bool("nonCompliant", opts.NonCompliant),
-	)
-
-	// TODO: This is a bit early, but sync.Once seems too much
-	// TODO: The next 5 "sections" are alot of setup that should be condensed
-	gt, err := ociutil.NewGraphTarget(ctx, parsedRef, opts)
+	gt, fstorePath, fstore, err := initRemoteConn(ctx, action.address, repoOptsFromConfig(parsedRef.Host(), cfg))
 	if err != nil {
-		return fmt.Errorf("initializing remote graph target: %w", err)
-	}
-
-	tmpDir := os.TempDir()
-	fstorePath, err := os.MkdirTemp(tmpDir, "Git-fstore-*")
-	if err != nil {
-		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
+		return fmt.Errorf("initializing: %w", err)
 	}
 	defer func() {
 		if err := os.RemoveAll(fstorePath); err != nil {
 			slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
 		}
 	}()
-
-	fstore, err := file.New(fstorePath)
-	if err != nil {
-		return fmt.Errorf("initializing OCI filestore: %w", err)
-	}
 	defer func() {
 		if err := fstore.Close(); err != nil {
 			slog.ErrorContext(ctx, "closing OCI file store", slog.String("error", err.Error()))
 		}
 	}()
 
-	action.remote = model.NewModeler(fstore, gt)
+	action.remote = model.NewModeler(action.address, fstore, gt)
 
 	var done bool
 	for !done {
@@ -180,7 +159,7 @@ func (action *Git) handleList(ctx context.Context, gc cmd.Git) error {
 		}
 	}
 
-	if err := action.remote.FetchOrDefault(ctx, action.address); err != nil {
+	if err := action.remote.FetchOrDefault(ctx); err != nil {
 		return err
 	}
 
@@ -204,7 +183,7 @@ func (action *Git) handlePush(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := action.remote.FetchOrDefault(ctx, action.address); err != nil {
+	if err := action.remote.FetchOrDefault(ctx); err != nil {
 		return err
 	}
 

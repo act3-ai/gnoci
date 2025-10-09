@@ -37,14 +37,14 @@ var (
 // TODO: Is this interface overloaded?
 type Modeler interface {
 	// Fetch pulls Git OCI metadata from a remote. It does not pull layers.
-	Fetch(ctx context.Context, ociRemote string) error
+	Fetch(ctx context.Context) error
 	// FetchOrDefault extends Fetch to initialize an empty OCI manifest and config
 	// if the remote ref does not exist.
-	FetchOrDefault(ctx context.Context, ociRemote string) error
+	FetchOrDefault(ctx context.Context) error
 	// FetchLayer fetches a packfile layer from OCI identifies by digest.
 	FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
 	// Push uploads the Git OCI data model in its current state.
-	Push(ctx context.Context, ociRemote string) (ocispec.Descriptor, error)
+	Push(ctx context.Context) (ocispec.Descriptor, error)
 	// AddPack adds a packfile as a layer to the Git OCI data model and updates
 	// the remote references whose objs are included in the packfile.
 	AddPack(ctx context.Context, path string, refs ...*plumbing.Reference) (ocispec.Descriptor, error)
@@ -64,16 +64,14 @@ type Modeler interface {
 	// CommitExists uses a local repository to resolve the best known OCI layer containing the commit.
 	// a nil error with an empty layer indicates a commit does not exist.
 	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
-
-	// TODO: LFS Support
-	// AddLFSFile(path string) (ocispec.Descriptor, error)
 }
 
-// NewModeler initializes a new modeler.
-func NewModeler(fstore *file.Store, gt oras.GraphTarget) Modeler {
+// NewModeler initializes a new git modeler.
+func NewModeler(ociRemote string, fstore *file.Store, gt oras.GraphTarget) Modeler {
 	return &model{
-		gt:     gt,
-		fstore: fstore,
+		ociRemote: ociRemote,
+		gt:        gt,
+		fstore:    fstore,
 	}
 }
 
@@ -81,31 +79,36 @@ func NewModeler(fstore *file.Store, gt oras.GraphTarget) Modeler {
 //
 // Note: updates to Git OCI metadata are not concurrency safe.
 type model struct {
-	gt     oras.GraphTarget
-	fstore *file.Store
+	ociRemote string
+	gt        oras.GraphTarget
+	fstore    *file.Store
 
 	// populated on fetch
 	fetched     bool
+	manDesc     ocispec.Descriptor
 	man         ocispec.Manifest
 	cfg         oci.ConfigGit
 	refsByLayer map[digest.Digest][]plumbing.Hash
+	newPacks    []ocispec.Descriptor
 
-	newPacks []ocispec.Descriptor
+	lfsMan ocispec.Manifest
+	newLFS []ocispec.Descriptor
 }
 
-func (m *model) Fetch(ctx context.Context, ociRemote string) error {
+func (m *model) Fetch(ctx context.Context) error {
 	if m.fetched {
 		return nil
 	}
 
 	slog.DebugContext(ctx, "resolving manifest descriptor")
-	manDesc, err := m.gt.Resolve(ctx, ociRemote)
+	var err error
+	m.manDesc, err = m.gt.Resolve(ctx, m.ociRemote)
 	if err != nil {
 		return fmt.Errorf("resolving manifest descriptor: %w", err)
 	}
 
 	slog.DebugContext(ctx, "fetching manifest")
-	manRaw, err := content.FetchAll(ctx, m.gt, manDesc)
+	manRaw, err := content.FetchAll(ctx, m.gt, m.manDesc)
 	if err != nil {
 		return fmt.Errorf("fetching manifest: %w", err)
 	}
@@ -130,11 +133,11 @@ func (m *model) Fetch(ctx context.Context, ociRemote string) error {
 	return nil
 }
 
-func (m *model) FetchOrDefault(ctx context.Context, ociRemote string) error {
-	err := m.Fetch(ctx, ociRemote)
+func (m *model) FetchOrDefault(ctx context.Context) error {
+	err := m.Fetch(ctx)
 	switch {
 	case errors.Is(err, errdef.ErrNotFound):
-		slog.InfoContext(ctx, "remote does not exist, initializing default manifest and config")
+		slog.InfoContext(ctx, "remote does not exist, initializing default git manifest and config")
 		m.cfg = oci.ConfigGit{
 			Heads: make(map[plumbing.ReferenceName]oci.ReferenceInfo, 0),
 			Tags:  make(map[plumbing.ReferenceName]oci.ReferenceInfo, 0),
@@ -168,7 +171,7 @@ func (m *model) FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadClos
 	return nil, fmt.Errorf("%w: %s", errLayerNotInManifest, dgst.String())
 }
 
-func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error) {
+func (m *model) Push(ctx context.Context) (ocispec.Descriptor, error) {
 	// TODO: Perhaps we could make this more efficient, ONLY in the case where
 	// multiple packfiles are added, if we make a custom oras.CopyGraphOptions to
 	// skip existing packfiles - but that may be tricky as I believe the HEAD
@@ -205,7 +208,7 @@ func (m *model) Push(ctx context.Context, ref string) (ocispec.Descriptor, error
 		return ocispec.Descriptor{}, fmt.Errorf("packing and pushing base manifest: %w", err)
 	}
 
-	if err := m.gt.Tag(ctx, manDesc, ref); err != nil {
+	if err := m.gt.Tag(ctx, manDesc, m.ociRemote); err != nil {
 		return manDesc, fmt.Errorf("tagging base manifest: %w", err)
 	}
 

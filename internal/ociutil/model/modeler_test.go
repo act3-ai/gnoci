@@ -117,7 +117,7 @@ func TestNewModeler(t *testing.T) {
 		}
 	}()
 
-	got := NewModeler(fstore, gt)
+	got := NewModeler(fooRemote, fstore, gt)
 
 	model := got.(*model)
 
@@ -202,6 +202,7 @@ func Test_model_Fetch(t *testing.T) {
 			}()
 
 			m := &model{
+				ociRemote:   tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -211,7 +212,7 @@ func Test_model_Fetch(t *testing.T) {
 				newPacks:    nil,
 			}
 
-			err = m.Fetch(t.Context(), tt.remote)
+			err = m.Fetch(t.Context())
 			tt.wantFn(t, m, err)
 
 			err = fstore.Close()
@@ -309,6 +310,7 @@ func Test_model_FetchOrDefault(t *testing.T) {
 			}()
 
 			m := &model{
+				ociRemote:   tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -318,7 +320,7 @@ func Test_model_FetchOrDefault(t *testing.T) {
 				newPacks:    nil,
 			}
 
-			err = m.FetchOrDefault(t.Context(), tt.remote)
+			err = m.FetchOrDefault(t.Context())
 			tt.wantFn(t, m, err)
 
 			err = fstore.Close()
@@ -380,6 +382,7 @@ func Test_model_FetchLayer(t *testing.T) {
 			}()
 
 			m := &model{
+				ociRemote:   tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -390,7 +393,7 @@ func Test_model_FetchLayer(t *testing.T) {
 			}
 
 			// fetching metadata is a prerequisite to fetching layers
-			err = m.Fetch(t.Context(), tt.remote)
+			err = m.Fetch(t.Context())
 			assert.NoError(t, err)
 
 			rc, err := m.FetchLayer(t.Context(), manifest.Layers[0].Digest)
@@ -547,8 +550,9 @@ func Test_model_Push(t *testing.T) {
 			gt := memory.New()
 
 			m := &model{
-				gt:     gt,
-				fstore: fstore,
+				ociRemote: fooRemote,
+				gt:        gt,
+				fstore:    fstore,
 				man: ocispec.Manifest{
 					Layers: []ocispec.Descriptor{expectedLayerDesc},
 				},
@@ -557,7 +561,7 @@ func Test_model_Push(t *testing.T) {
 				newPacks:    tt.newPacks,
 			}
 
-			manDesc, err := m.Push(t.Context(), fooRemote)
+			manDesc, err := m.Push(t.Context())
 
 			tt.wantFn(t, m, manDesc, gt, err)
 		})

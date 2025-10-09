@@ -2,207 +2,211 @@
 package actions
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"strings"
 
-	"github.com/act3-ai/gnoci/internal/cmd"
-	"github.com/act3-ai/gnoci/internal/ociutil"
-	"github.com/act3-ai/gnoci/internal/ociutil/model"
-	"github.com/go-git/go-git/v5"
+	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
+
+	"github.com/act3-ai/gnoci/internal/lfs"
+	"github.com/act3-ai/gnoci/internal/ociutil/model"
 )
 
 // GitLFS represents the base action.
 type GitLFS struct {
-	// TODO: Could be dangerous when storing in struct like this... mutex?
-	batcher cmd.BatchReadWriter
-
-	// local repository
-	gitDir string
-	local  *git.Repository
-
 	// OCI remote
-	name   string // may have same value as address
-	addess string
-	remote model.Modeler
+	gt     oras.GraphTarget
+	remote model.LFSModeler
+	in     *bufio.Scanner
+	out    io.Writer
 
 	version string
 }
 
 // NewGitLFS creates a new Tool with default values.
-func NewGitLFS(in io.Reader, out io.Writer, gitDir, shortname, address, version string) *GitLFS {
+func NewGitLFS(in io.Reader, out io.Writer, version string) *GitLFS {
 	return &GitLFS{
-		batcher: cmd.NewBatcher(in, out),
-		gitDir:  gitDir,
-		name:    shortname,
-		addess:  strings.TrimPrefix(address, "oci://"),
+		in:      bufio.NewScanner(in),
+		out:     out,
 		version: version,
 	}
 }
 
 // Run runs the the primary git-remote-oci action.
 func (action *GitLFS) Run(ctx context.Context) error {
-	// TODO: This is a bit early, but sync.Once seems too much
-	// TODO: The next 5 "sections" are alot of setup that should be condensed
-	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
+	line, err := action.readLine()
 	if err != nil {
-		return fmt.Errorf("initializing remote graph target: %w", err)
+		return err
 	}
 
-	tmpDir := os.TempDir()
-	fstorePath, err := os.MkdirTemp(tmpDir, "GnOCI-fstore-*")
+	// first message is always an InitRequest
+	var initReq lfs.InitRequest
+	if err := json.Unmarshal(line, &initReq); err != nil {
+		return fmt.Errorf("decoding InitRequest: %w", err)
+	}
+
+	if err := initReq.Validate(); err != nil {
+		return err
+	}
+
+	var fstorePath string
+	var fstore *file.Store
+	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, initReq.Remote)
 	if err != nil {
-		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
+		return fmt.Errorf("initializing: %w", err)
 	}
 	defer func() {
 		if err := os.RemoveAll(fstorePath); err != nil {
 			slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
 		}
 	}()
-
-	fstore, err := file.New(fstorePath)
-	if err != nil {
-		return fmt.Errorf("initializing OCI filestore: %w", err)
-	}
 	defer func() {
 		if err := fstore.Close(); err != nil {
 			slog.ErrorContext(ctx, "closing OCI file store", slog.String("error", err.Error()))
 		}
 	}()
 
-	action.remote = model.NewModeler(fstore, gt)
+	action.remote = model.NewLFSModeler(initReq.Remote, fstore, action.gt)
 
-	var done bool
-	for !done {
-		done, err = action.handleCmd(ctx)
-		if err != nil {
-			return err
-		}
+	if err := action.remote.Fetch(ctx); err != nil {
+		return fmt.Errorf("fetching base git metadata: %w", err)
 	}
 
-	return nil
-}
-
-// handleCmd returns true, nil if command handling is complete.
-func (action *GitLFS) handleCmd(ctx context.Context) (bool, error) {
-	gc, err := action.batcher.Read(ctx)
-	if err != nil {
-		return false, fmt.Errorf("reading next line: %w", err)
+	if err := action.remote.FetchLFSOrDefault(ctx); err != nil {
+		return err
 	}
 
-	switch gc.Cmd {
-	case cmd.Done:
-		return true, nil
-	case cmd.Empty:
-		return false, nil
-	case cmd.Capabilities:
-		// Git should only need this once on the first cmd, but here is safer
-		if err := cmd.HandleCapabilities(ctx, gc, action.batcher); err != nil {
-			return false, fmt.Errorf("handling capabilities command: %w", err)
-		}
-	case cmd.Option:
-		if err := cmd.HandleOption(ctx, gc, action.batcher); err != nil {
-			return false, fmt.Errorf("handling option command: %w", err)
-		}
-	case cmd.List:
-		if err := action.handleList(ctx, gc); err != nil {
-			return false, fmt.Errorf("handling list command: %w", err)
-		}
-	case cmd.Push:
-		if err := action.handlePush(ctx, gc); err != nil {
-			return false, fmt.Errorf("handling push command batch: %w", err)
-		}
-	case cmd.Fetch:
-		if err := action.handleFetch(ctx, gc); err != nil {
-			return false, fmt.Errorf("handling fetch command batch: %w", err)
-		}
+	switch initReq.Operation {
+	case lfs.DownloadOperation:
+		return action.runDownload(ctx)
+	case lfs.UploadOperation:
+		return action.runUpload(ctx)
 	default:
-		return false, fmt.Errorf("%w: %s", cmd.ErrUnsupportedCommand, gc.String())
+		// theoretically impossible
+		return fmt.Errorf("%w: %s", lfs.ErrInvalidOperation, initReq.Operation)
 	}
-
-	return false, nil
 }
 
-// localRepo opens the local repository if it hasn't been opened already.
-func (action *GitLFS) localRepo() (*git.Repository, error) {
-	if action.local == nil {
-		if action.gitDir == "" {
-			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
-		}
-		var err error
-		action.local, err = git.PlainOpen(action.gitDir)
-		if err != nil {
-			return nil, fmt.Errorf("opening local repository: %w", err)
-		}
-	}
-
-	return action.local, nil
+func (action *GitLFS) runDownload(ctx context.Context) error {
+	return errors.New("not implemented")
 }
 
-func (action *GitLFS) handleList(ctx context.Context, gc cmd.Git) error {
-	var local *git.Repository
-	var err error
-	if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
-		local, err = action.localRepo()
+func (action *GitLFS) runUpload(ctx context.Context) error {
+	// TODO: by their protocol spec, they block until the transfer is complete
+	// this is far less than ideal for us. Unfortunately, we may not be able
+	// to do this concurrently as we would not be able to update the LFS
+	// manifest across processes, as their concurrency is done with multiple
+	// invocations of our tool.
+	// TODO: if the above is true, we need to refactor such that we write err
+	// responses to git-lfs within the goroutines spun up by model.LFSModeler.PushLFS
+	for {
+		line, err := action.readLine()
 		if err != nil {
 			return err
 		}
+
+		var transferReq lfs.TransferRequest
+		if err := json.Unmarshal(line, &transferReq); err != nil {
+			// TODO: is it possible to write back to git-lfs here or is this fatal?
+			return fmt.Errorf("decoding TransferRequest: %w", err)
+		}
+
+		// TODO: validate the transfer request
+
+		if transferReq.Event == lfs.TerminateEvent {
+			break
+		}
+
+		if _, err := action.remote.AddLFSFile(ctx, transferReq.Path); err != nil {
+			action.writeResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
+			continue
+		}
+
+		// HACK: is this necessary? per the spec, it seems like it is...
+		action.writeProgress(ctx, transferReq.Oid, 1, 1)
+
+		// notify completion
+		action.writeResponse(ctx, transferReq.Oid, "", nil)
 	}
 
-	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
-		return err
-	}
-
-	if err := cmd.HandleList(ctx, local, action.remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
-		return fmt.Errorf("running list command: %w", err)
+	_, err := action.remote.PushLFS(ctx)
+	if err != nil {
+		return fmt.Errorf("pushing LFS to OCI: %w", err)
 	}
 
 	return nil
 }
 
-func (action *GitLFS) handlePush(ctx context.Context, gc cmd.Git) error {
-	// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
-	batch, err := action.batcher.ReadBatch(ctx)
+func (action *GitLFS) writeProgress(ctx context.Context, oid string, soFar, sinceLast int) {
+	log := slog.With(slog.String("event", string(lfs.UploadEvent)), slog.String("oid", oid))
+
+	progressResp := lfs.ProgressResponse{
+		Event:          lfs.ProgessEvent,
+		Oid:            oid,
+		BytesSoFar:     soFar,
+		BytesSinceLast: sinceLast,
+	}
+
+	raw, err := json.Marshal(progressResp)
 	if err != nil {
-		return fmt.Errorf("reading push batch: %w", err)
-	}
-	fullBatch := append([]cmd.Git{gc}, batch...)
-
-	local, err := action.localRepo()
-	if err != nil {
-		return err
+		log.ErrorContext(ctx, "encoding progress response", slog.String("error", err.Error()))
+		return
 	}
 
-	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
-		return err
+	if _, err := action.out.Write(raw); err != nil {
+		log.ErrorContext(ctx, "writing progress response", slog.String("error", err.Error()))
 	}
-
-	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.addess, fullBatch, action.batcher); err != nil {
-		return fmt.Errorf("running push commands: %w", err)
-	}
-
-	return nil
 }
 
-func (action *GitLFS) handleFetch(ctx context.Context, gc cmd.Git) error {
-	batch, err := action.batcher.ReadBatch(ctx)
+func (action *GitLFS) writeResponse(ctx context.Context, oid string, path string, err error) {
+	log := slog.With(slog.String("event", string(lfs.UploadEvent)), slog.String("oid", oid))
+
+	transferResp := lfs.TransferResponse{
+		Event: lfs.CompleteEvent,
+		Path:  path,
+		Oid:   oid,
+	}
+
+	// TODO: is this necessary?
+	// if path != "" {
+	// 	transferResp.Path = path
+	// }
+
 	if err != nil {
-		return fmt.Errorf("reading fetch batch: %w", err)
+		transferResp.Error = lfs.ErrCodeMessage{
+			Code:    1,
+			Message: err.Error(),
+		}
 	}
-	fullBatch := append([]cmd.Git{gc}, batch...)
 
-	local, err := action.localRepo()
+	raw, err := json.Marshal(transferResp)
 	if err != nil {
-		return err
+		log.ErrorContext(ctx, "encoding transfer response", slog.String("error", err.Error()))
+		return
 	}
 
-	if err := cmd.HandleFetch(ctx, local, action.remote, action.addess, fullBatch, action.batcher); err != nil {
-		return fmt.Errorf("running fetch command: %w", err)
+	if _, err := action.out.Write(raw); err != nil {
+		log.ErrorContext(ctx, "writing transfer response", slog.String("error", err.Error()))
 	}
+}
 
-	return nil
+// readLine
+// TODO: consider making this generic.
+func (action *GitLFS) readLine() ([]byte, error) {
+	ok := action.in.Scan()
+	switch {
+	case !ok && action.in.Err() != nil:
+		return nil, fmt.Errorf("reading single command from git-lfs: %w", action.in.Err())
+	case !ok:
+		// EOF
+		return nil, nil
+	default:
+		return action.in.Bytes(), nil
+	}
 }
