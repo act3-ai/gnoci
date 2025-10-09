@@ -21,8 +21,8 @@ import (
 	"oras.land/oras-go/v2/registry"
 )
 
-// GnOCI represents the base action.
-type GnOCI struct {
+// Git represents the base action.
+type Git struct {
 	version   string
 	apiScheme *runtime.Scheme
 	// ConfigFiles contains a list of potential configuration file locations.
@@ -40,9 +40,9 @@ type GnOCI struct {
 	remote  model.Modeler
 }
 
-// NewGnOCI creates a new Tool with default values.
-func NewGnOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version string, cfgFiles []string) *GnOCI {
-	return &GnOCI{
+// NewGit creates a new Tool with default values.
+func NewGit(in io.Reader, out io.Writer, gitDir, shortname, address, version string, cfgFiles []string) *Git {
+	return &Git{
 		version:     version,
 		apiScheme:   apis.NewScheme(),
 		ConfigFiles: cfgFiles,
@@ -54,7 +54,7 @@ func NewGnOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version s
 }
 
 // Run runs the the primary git-remote-oci action.
-func (action *GnOCI) Run(ctx context.Context) error {
+func (action *Git) Run(ctx context.Context) error {
 	cfg, err := action.GetConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("getting configuration: %w", err)
@@ -81,7 +81,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 	}
 
 	tmpDir := os.TempDir()
-	fstorePath, err := os.MkdirTemp(tmpDir, "GnOCI-fstore-*")
+	fstorePath, err := os.MkdirTemp(tmpDir, "Git-fstore-*")
 	if err != nil {
 		return fmt.Errorf("creating temporary directory for intermediate OCI file store: %w", err)
 	}
@@ -115,7 +115,7 @@ func (action *GnOCI) Run(ctx context.Context) error {
 }
 
 // handleCmd returns true, nil if command handling is complete.
-func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
+func (action *Git) handleCmd(ctx context.Context) (bool, error) {
 	gc, err := action.batcher.Read(ctx)
 	if err != nil {
 		return false, fmt.Errorf("reading next line: %w", err)
@@ -155,7 +155,7 @@ func (action *GnOCI) handleCmd(ctx context.Context) (bool, error) {
 }
 
 // localRepo opens the local repository if it hasn't been opened already.
-func (action *GnOCI) localRepo() (*git.Repository, error) {
+func (action *Git) localRepo() (*git.Repository, error) {
 	if action.local == nil {
 		if action.gitDir == "" {
 			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
@@ -170,7 +170,7 @@ func (action *GnOCI) localRepo() (*git.Repository, error) {
 	return action.local, nil
 }
 
-func (action *GnOCI) handleList(ctx context.Context, gc cmd.Git) error {
+func (action *Git) handleList(ctx context.Context, gc cmd.Git) error {
 	var local *git.Repository
 	var err error
 	if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
@@ -191,7 +191,7 @@ func (action *GnOCI) handleList(ctx context.Context, gc cmd.Git) error {
 	return nil
 }
 
-func (action *GnOCI) handlePush(ctx context.Context, gc cmd.Git) error {
+func (action *Git) handlePush(ctx context.Context, gc cmd.Git) error {
 	// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
 	batch, err := action.batcher.ReadBatch(ctx)
 	if err != nil {
@@ -215,7 +215,7 @@ func (action *GnOCI) handlePush(ctx context.Context, gc cmd.Git) error {
 	return nil
 }
 
-func (action *GnOCI) handleFetch(ctx context.Context, gc cmd.Git) error {
+func (action *Git) handleFetch(ctx context.Context, gc cmd.Git) error {
 	batch, err := action.batcher.ReadBatch(ctx)
 	if err != nil {
 		return fmt.Errorf("reading fetch batch: %w", err)
@@ -235,12 +235,12 @@ func (action *GnOCI) handleFetch(ctx context.Context, gc cmd.Git) error {
 }
 
 // GetScheme returns the runtime scheme used for configuration file loading.
-func (action *GnOCI) GetScheme() *runtime.Scheme {
+func (action *Git) GetScheme() *runtime.Scheme {
 	return action.apiScheme
 }
 
 // GetConfig loads Configuration using the current git-remote-oci options.
-func (action *GnOCI) GetConfig(ctx context.Context) (c *v1alpha1.Configuration, err error) {
+func (action *Git) GetConfig(ctx context.Context) (c *v1alpha1.Configuration, err error) {
 	c = &v1alpha1.Configuration{}
 
 	slog.DebugContext(ctx, "searching for configuration files", slog.Any("cfgFiles", action.ConfigFiles))

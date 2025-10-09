@@ -10,8 +10,8 @@ import (
 	"github.com/act3-ai/go-common/pkg/config"
 )
 
-// NewCLI creates the base git-remote-oci command.
-func NewCLI(version string) *cobra.Command {
+// NewGitCLI creates the base git-remote-oci command.
+func NewGitCLI(version string) *cobra.Command {
 	// cmd represents the base command when called without any subcommands
 	cmd := &cobra.Command{
 		Use:          "git-remote-oci REPOSITORY [URL]",
@@ -26,7 +26,7 @@ func NewCLI(version string) *cobra.Command {
 				address = args[1]
 			}
 
-			action := actions.NewGnOCI(
+			action := actions.NewGit(
 				cmd.InOrStdin(),
 				cmd.OutOrStdout(),
 				os.Getenv("GIT_DIR"),
