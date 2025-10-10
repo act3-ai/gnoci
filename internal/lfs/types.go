@@ -122,10 +122,10 @@ type TransferRequest struct {
 //
 // - https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#downloads
 type TransferResponse struct {
-	Event Event          `json:"event"`
-	Oid   string         `json:"oid"`
-	Path  string         `json:"path,omitempty"`
-	Error ErrCodeMessage `json:"error"`
+	Event Event           `json:"event"`
+	Oid   string          `json:"oid"`
+	Path  string          `json:"path,omitempty"`
+	Error *ErrCodeMessage `json:"error,omitempty"`
 }
 
 // ProgressResponse is sent periodically while processing a [TransferRequest].

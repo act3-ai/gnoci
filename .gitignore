@@ -1,4 +1,5 @@
-/bin
+/bin/*
+!bin/scripts
 /tool
 /coverage*.*
 /report.*

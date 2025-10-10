@@ -106,8 +106,13 @@ The recommended testing method is to use `dagger`.
 ### Functional Tests
 
 <!-- Describe how to run functional tests -->
-TODO
+
+## Debugging
+
+The following environment variables are helpful to track git and git-lfs interactions with our remote helpers:
+
+- `GIT_TRACE=1`
+- `GIT_TRANSFER_TRACE=1`
+- `GIT_LFS_DEBUG=1`
 
 ## Releasing
-
-TODO

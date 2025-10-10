@@ -10,12 +10,14 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
 
 	"github.com/act3-ai/gnoci/internal/lfs"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/go-git/go-git/v5"
 )
 
 // GitLFS represents the base action.
@@ -40,6 +42,7 @@ func NewGitLFS(in io.Reader, out io.Writer, version string) *GitLFS {
 
 // Run runs the the primary git-remote-oci action.
 func (action *GitLFS) Run(ctx context.Context) error {
+	slog.DebugContext(ctx, "running git-lfs-remote-oci")
 	line, err := action.readLine()
 	if err != nil {
 		return err
@@ -55,9 +58,27 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return err
 	}
 
+	// TODO: How can we get the actual git dir?
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return fmt.Errorf("opening local repository: %w", err)
+	}
+
+	// Look up the remote by name
+	remote, err := repo.Remote(initReq.Remote)
+	if err != nil {
+		return fmt.Errorf("resolving remote URL for %s: %w", initReq.Remote, err)
+	}
+	remoteURLs := remote.Config().URLs
+	if len(remoteURLs) < 1 {
+		return fmt.Errorf("no URLs configured for remote %s", initReq.Remote)
+	}
+	remoteName := strings.TrimPrefix(remoteURLs[0], "oci://")
+	slog.DebugContext(ctx, "resolved remote URL", "url", remoteName)
+
 	var fstorePath string
 	var fstore *file.Store
-	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, initReq.Remote)
+	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, remoteName)
 	if err != nil {
 		return fmt.Errorf("initializing: %w", err)
 	}
@@ -72,15 +93,18 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		}
 	}()
 
-	action.remote = model.NewLFSModeler(initReq.Remote, fstore, action.gt)
+	action.remote = model.NewLFSModeler(remoteName, fstore, action.gt)
 
-	if err := action.remote.Fetch(ctx); err != nil {
-		return fmt.Errorf("fetching base git metadata: %w", err)
+	if err := action.remote.FetchOrDefault(ctx); err != nil {
+		return fmt.Errorf("fetching base git OCI metadata: %w", err)
 	}
 
+	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
 	if err := action.remote.FetchLFSOrDefault(ctx); err != nil {
 		return err
 	}
+
+	action.writeInitResponse(ctx, nil)
 
 	switch initReq.Operation {
 	case lfs.DownloadOperation:
@@ -94,10 +118,12 @@ func (action *GitLFS) Run(ctx context.Context) error {
 }
 
 func (action *GitLFS) runDownload(ctx context.Context) error {
+	slog.DebugContext(ctx, "handling download requests")
 	return errors.New("not implemented")
 }
 
 func (action *GitLFS) runUpload(ctx context.Context) error {
+	slog.DebugContext(ctx, "handling upload requests")
 	// TODO: by their protocol spec, they block until the transfer is complete
 	// this is far less than ideal for us. Unfortunately, we may not be able
 	// to do this concurrently as we would not be able to update the LFS
@@ -106,10 +132,12 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 	// TODO: if the above is true, we need to refactor such that we write err
 	// responses to git-lfs within the goroutines spun up by model.LFSModeler.PushLFS
 	for {
+		slog.DebugContext(ctx, "waiting for upload request")
 		line, err := action.readLine()
 		if err != nil {
 			return err
 		}
+		slog.DebugContext(ctx, "received upload request", slog.String("request", string(line)))
 
 		var transferReq lfs.TransferRequest
 		if err := json.Unmarshal(line, &transferReq); err != nil {
@@ -120,11 +148,12 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 		// TODO: validate the transfer request
 
 		if transferReq.Event == lfs.TerminateEvent {
+			slog.DebugContext(ctx, "received terminate request")
 			break
 		}
 
 		if _, err := action.remote.AddLFSFile(ctx, transferReq.Path); err != nil {
-			action.writeResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
+			action.writeTransferResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
 			continue
 		}
 
@@ -132,7 +161,7 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 		action.writeProgress(ctx, transferReq.Oid, 1, 1)
 
 		// notify completion
-		action.writeResponse(ctx, transferReq.Oid, "", nil)
+		action.writeTransferResponse(ctx, transferReq.Oid, "", nil)
 	}
 
 	_, err := action.remote.PushLFS(ctx)
@@ -141,6 +170,33 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (action *GitLFS) writeInitResponse(ctx context.Context, err error) {
+	slog.DebugContext(ctx, "writing init response")
+
+	// TODO: is this necessary or can we marshal with an empty error?
+	raw := []byte("{}")
+	if err != nil {
+		initResp := lfs.InitResponse{
+			Error: lfs.ErrCodeMessage{
+				Code:    1,
+				Message: err.Error(),
+			},
+		}
+
+		var err error
+		raw, err = json.Marshal(initResp)
+		if err != nil {
+			slog.ErrorContext(ctx, "encoding init response", slog.String("error", err.Error()))
+			return
+		}
+	}
+
+	if _, err := action.out.Write(withNewline(raw)); err != nil {
+		slog.ErrorContext(ctx, "writing init response", slog.String("error", err.Error()))
+	}
+	slog.DebugContext(ctx, "wrote init resonse", slog.String("response", string(raw)))
 }
 
 func (action *GitLFS) writeProgress(ctx context.Context, oid string, soFar, sinceLast int) {
@@ -159,27 +215,22 @@ func (action *GitLFS) writeProgress(ctx context.Context, oid string, soFar, sinc
 		return
 	}
 
-	if _, err := action.out.Write(raw); err != nil {
+	if _, err := action.out.Write(withNewline(raw)); err != nil {
 		log.ErrorContext(ctx, "writing progress response", slog.String("error", err.Error()))
 	}
 }
 
-func (action *GitLFS) writeResponse(ctx context.Context, oid string, path string, err error) {
-	log := slog.With(slog.String("event", string(lfs.UploadEvent)), slog.String("oid", oid))
+func (action *GitLFS) writeTransferResponse(ctx context.Context, oid string, path string, err error) {
+	log := slog.With(slog.String("oid", oid))
+	log.DebugContext(ctx, "writing transfer response")
 
 	transferResp := lfs.TransferResponse{
 		Event: lfs.CompleteEvent,
 		Path:  path,
 		Oid:   oid,
 	}
-
-	// TODO: is this necessary?
-	// if path != "" {
-	// 	transferResp.Path = path
-	// }
-
 	if err != nil {
-		transferResp.Error = lfs.ErrCodeMessage{
+		transferResp.Error = &lfs.ErrCodeMessage{
 			Code:    1,
 			Message: err.Error(),
 		}
@@ -191,9 +242,11 @@ func (action *GitLFS) writeResponse(ctx context.Context, oid string, path string
 		return
 	}
 
-	if _, err := action.out.Write(raw); err != nil {
+	if _, err := action.out.Write(withNewline(raw)); err != nil {
 		log.ErrorContext(ctx, "writing transfer response", slog.String("error", err.Error()))
 	}
+
+	log.DebugContext(ctx, "wrote transfer response", slog.String("response", string(raw)))
 }
 
 // readLine
@@ -209,4 +262,8 @@ func (action *GitLFS) readLine() ([]byte, error) {
 	default:
 		return action.in.Bytes(), nil
 	}
+}
+
+func withNewline(line []byte) []byte {
+	return append(line, []byte("\n")...)
 }

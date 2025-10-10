@@ -39,7 +39,6 @@ func HandleFetch(ctx context.Context, local *git.Repository, remote model.Modele
 	// TODO: we should parallelize this, but we don't yet know how safe this
 	// is to do concurrently, consider locking the packfile.UpdateObjectStorage.
 	for dgst := range packLayers {
-		slog.DebugContext(ctx, "fetching packfile", "layerDigest", dgst)
 		rc, err := remote.FetchLayer(ctx, dgst)
 		if err != nil {
 			return fmt.Errorf("fetching packfile layer: %w", err)

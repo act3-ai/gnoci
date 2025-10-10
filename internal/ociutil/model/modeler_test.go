@@ -561,7 +561,7 @@ func Test_model_Push(t *testing.T) {
 				newPacks:    tt.newPacks,
 			}
 
-			manDesc, err := m.Push(t.Context())
+			manDesc, err := m.Push(t.Context(), true)
 
 			tt.wantFn(t, m, manDesc, gt, err)
 		})

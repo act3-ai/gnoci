@@ -9,7 +9,7 @@ import (
 func NewGitLFSCLI(version string) *cobra.Command {
 	// cmd represents the base command when called without any subcommands
 	cmd := &cobra.Command{
-		Use:          "git-lfs-remote-oci REPOSITORY [URL]",
+		Use:          "git-lfs-remote-oci",
 		Short:        "A git-lfs remote helper for syncing git-lfs files in OCI Registries.",
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
