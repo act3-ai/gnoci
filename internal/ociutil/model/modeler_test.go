@@ -280,8 +280,12 @@ func Test_model_FetchOrDefault(t *testing.T) {
 				}
 
 				expectedEmptyConfig := oci.ConfigGit{
-					Heads: map[plumbing.ReferenceName]oci.ReferenceInfo{},
-					Tags:  map[plumbing.ReferenceName]oci.ReferenceInfo{},
+					Heads: map[plumbing.ReferenceName]oci.ReferenceInfo{
+						tempGitManifest: {
+							Commit: "foo",
+						},
+					},
+					Tags: map[plumbing.ReferenceName]oci.ReferenceInfo{},
 				}
 
 				expectedRefsByLayer := map[digest.Digest][]plumbing.Hash{}
@@ -289,7 +293,10 @@ func Test_model_FetchOrDefault(t *testing.T) {
 				assert.NoError(t, err)
 				assert.True(t, m.fetched)
 				assert.Equal(t, expectedEmptyManifest, m.man)
-				assert.Equal(t, expectedEmptyConfig, m.cfg)
+				assert.Equal(t, len(expectedEmptyConfig.Heads), len(m.cfg.Heads))
+				_, ok := m.cfg.Heads[tempGitManifest]
+				assert.True(t, ok)
+				assert.Equal(t, expectedEmptyConfig.Tags, m.cfg.Tags)
 				assert.Equal(t, expectedRefsByLayer, m.refsByLayer)
 				assert.Nil(t, m.newPacks)
 			},
