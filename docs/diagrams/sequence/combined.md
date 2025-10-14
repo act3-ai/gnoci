@@ -1,26 +1,63 @@
 # Git and Git LFS Combined
 
+This sequence diagram outlines the interactions between `git`, `git-remote-oci`, `git-lfs`, `git-lfs-remote-oci`, and the remote OCI storage. For specific interactions for fetches and pushes, please refer to the individual sequence diagrams.
+
+- [OCI Data Model](../../design/oci-data-model.md)
+- [git push](./push.md)
+- [git fetch](./fetch.md)
+- [git-lfs push](./push_lfs.md)
+- [git-lfs fetch](./fetch_lfs.md)
+
+## Design
+
+Although not required, it is recommended to be familiar with the [OCI Data Model](../../design/oci-data-model.md) as it influences how remote storage is handled between processes.
+
+### Overview
+
+From a high level, we have four processes working together to determine what data needs to be transferred, how to store the data, and how to transfer the data.
+
+#### Processes
+
+1. `git` - determines what git objects need to be transferred, and what references need to be updated.
+2. `git-remote-oci` - determines how git objects should be stored in OCI, and transfers them.
+3. `git-lfs` - determines what git-lfs objects need to be transferred.
+4. `git-lfs-remote-oci` - determines how git-lfs objects should be sotred in OCI, and transfers them
+
+#### Inter-process Communication
+
+- `git` and `git-remote-oci` communicate according to the [git remote helpers protocol](https://git-scm.com/docs/gitremote-helpers).
+- `git-lfs` and `git-lfs-remote-oci` communicate according to the [git-lfs custom transfers protocol](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md).
+
+### Quirks
+
+#### Temporary LFS files without Git objects
+
+The temporary handling of remote storage during a push is due to the nature of having `git-remote-oci` and `git-lfs-remote-oci` running as separate processes, due to the externally defined protocols, and the lack of inter-process communication between `git-remote-oci` and `git-lfs-remote-oci`, as we do not spin up these processes ourselves and other solutions add more complexity than they're worth.
+
+Per the [data model](../../design/oci-data-model.md), we have two OCI manifests: a base manifest for `git` packfiles, and a referrer manifest for `git-lfs` tracked files. `git-remote-oci` and `git-lfs-remote-oci` update the objects of these manifests, respectively. As for the metadata, `git-lfs-remote-oci` constructs a manifest that refers to the non-updated base git manifest. When `git-remote-oci` completes pushing the updated base manifest data model it will update the referrer manifest to point to the new base manifest, and finally updating the OCI tag reference. As a result of this order of operations, there is a brief moment in time where the OCI data model contains LFS files that are not pointed to by any git objects. This is relatively the same how `git` and `git-lfs` handle files without custom remote helpers; `git-lfs` pushes LFS files to a remote LFS server, then `git` pushes the git objects themseves (the LFS pointer files).
+
 ## Summary
 
-1. `git push oci://... main`
-2. `git-remote-oci <shortname> oci://...` - list refs
-3. `git pre-push`
-4. `git-lfs pre-push oci://...`
+1. User executes `git push oci://... main`
+2. `git` invokes `git-remote-oci <shortname> oci://...` to list references
+3. `git pre-push` - `git` invokes pre-push hooks (`git-lfs`)
+4. `git-lfs pre-push oci://...` - `git-lfs` invokes pre-push hooks (`git-lfs-remote-oci`)
 5. `git-lfs-remote-oci` - push LFS files
-6. `git`
-7. `git-remote-oci` - push packfiles
+6. `git` - `git` starts push action
+7. `git-remote-oci` - `git` invokes remote helper to perform the push
 
 ## Sequence Diagram
 
-Note: `git-remote-oci` and `git-lfs-remote-oci` are separate processes.
+The following is a push example, fetches are relatively the same although without the quirky referrers handling.
 
 ```mermaid
 sequenceDiagram
-    participant Git as Git
-    participant LFS as Git LFS
-    participant Helper as Transfer Helper
-    participant LFSHelper as LFS Transfer Helper
-    participant Remote as Remote Storage
+    participant Git as git
+    participant LFS as git-lfs
+    participant Helper as git-remote-oci
+    participant LFSHelper as git-lfs-remote-oci
+    participant Remote as OCI Remote
+    
     
     Note over Git,Remote: List Remote References
     Git->>Helper: list-for-push
