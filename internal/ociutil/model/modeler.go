@@ -96,8 +96,9 @@ type model struct {
 	refsByLayer map[digest.Digest][]plumbing.Hash
 	newPacks    []ocispec.Descriptor
 
-	lfsMan ocispec.Manifest
-	newLFS []ocispec.Descriptor
+	lfsMan     ocispec.Manifest
+	lfsManDesc ocispec.Descriptor
+	newLFS     []ocispec.Descriptor
 }
 
 func (m *model) Fetch(ctx context.Context) error {

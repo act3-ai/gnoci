@@ -5,11 +5,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"oras.land/oras-go/v2"
@@ -18,6 +18,7 @@ import (
 	"github.com/act3-ai/gnoci/internal/lfs"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/go-git/go-git/v5"
+	"github.com/opencontainers/go-digest"
 )
 
 // GitLFS represents the base action.
@@ -119,7 +120,68 @@ func (action *GitLFS) Run(ctx context.Context) error {
 
 func (action *GitLFS) runDownload(ctx context.Context) error {
 	slog.DebugContext(ctx, "handling download requests")
-	return errors.New("not implemented")
+
+	tmpDir, err := os.MkdirTemp(os.TempDir(), "git-lfs-remote-oci-pull-*")
+	if err != nil {
+		return fmt.Errorf("preparing temporary LFS pull directory: %w", err)
+	}
+
+	for {
+		slog.DebugContext(ctx, "waiting for download request")
+		line, err := action.readLine()
+		if err != nil {
+			return err
+		}
+		slog.DebugContext(ctx, "received download request", slog.String("request", string(line)))
+
+		var transferReq lfs.TransferRequest
+		if err := json.Unmarshal(line, &transferReq); err != nil {
+			return fmt.Errorf("decoding TransferRequest: %w", err)
+		}
+
+		if transferReq.Event == lfs.TerminateEvent {
+			slog.DebugContext(ctx, "received terminate request")
+			break
+		}
+
+		// TODO: validate the transfer request
+		// HACK
+		if transferReq.Event != lfs.DownloadEvent {
+			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.DownloadEvent)
+		}
+
+		// HACK: is this necessary? per the spec, we "should"
+		action.writeProgress(ctx, transferReq.Oid, 1, 1)
+
+		// TODO: convenient that LFS uses sha256, but are other digest methods out there?
+		rc, err := action.remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid))
+		if err != nil {
+			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("fetching LFS file: %w", err))
+			continue
+		}
+
+		tmpFilePath := filepath.Join(tmpDir, transferReq.Oid)
+		f, err := os.OpenFile(tmpFilePath, os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("opening LFS temp file: %w", err))
+			continue
+		}
+
+		n, err := io.Copy(f, rc)
+		rc.Close()
+		f.Close()
+		switch {
+		case err != nil:
+			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("copying LFS temp file: %w", err))
+		case n != transferReq.Size:
+			// TODO: double check protocol spec, LFS may handle this validation for us
+			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("unexpected LFS file size, expected %d, got %d", transferReq.Size, n))
+		default:
+			action.writeTransferResponse(ctx, transferReq.Oid, tmpFilePath, nil)
+		}
+	}
+
+	return nil
 }
 
 func (action *GitLFS) runUpload(ctx context.Context) error {
@@ -145,11 +207,15 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 			return fmt.Errorf("decoding TransferRequest: %w", err)
 		}
 
-		// TODO: validate the transfer request
-
 		if transferReq.Event == lfs.TerminateEvent {
 			slog.DebugContext(ctx, "received terminate request")
 			break
+		}
+
+		// TODO: validate the transfer request
+		// HACK
+		if transferReq.Event != lfs.UploadEvent {
+			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.UploadEvent)
 		}
 
 		if _, err := action.remote.AddLFSFile(ctx, transferReq.Path); err != nil {
@@ -157,7 +223,7 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 			continue
 		}
 
-		// HACK: is this necessary? per the spec, it seems like it is...
+		// HACK: is this necessary? per the spec, we "should"
 		action.writeProgress(ctx, transferReq.Oid, 1, 1)
 
 		// notify completion
