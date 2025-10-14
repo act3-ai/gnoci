@@ -2,12 +2,19 @@
 
 Note: Every response (resp) to git-lfs requests (req) can return an error code and message.
 
+Legend:
+
+- git-lfs: `git-lfs` process.
+- git-lfs-remote-oci: `git-lfs-remote-oci` process.
+- Local OCI: local OCI storage, prepares LFS files as OCI layers.
+- Remote OCI: remote OCI storage, the `oci://<url>` push destination.
+
 ```mermaid
 sequenceDiagram
-    participant LFS as Git LFS
-    participant Helper as Custom Transfer Helper
-    participant LocalStorage as Local
-    participant Remote as Remote Storage
+    participant LFS as git-lfs
+    participant Helper as git-lfs-remote-oci
+    participant LocalStorage as Local OCI
+    participant Remote as Remote OCI
 
     Note over LFS,Helper: git-lfs pre-push hook
 
@@ -23,20 +30,16 @@ sequenceDiagram
     %% Prepare loop
     loop For each LFS file
         LFS->>Helper: transfer req (upload, OID, path, size)
-        Helper->>LocalStorage: prepare
+        Helper->>LocalStorage: Prepare LFS OCI layer
+        LocalStorage->>Remote: Push LFS OCI layer
         Helper->>LFS: progress (bytesSoFar, bytesSinceLast)
         Helper->>LFS: progress (bytesSoFar, bytesSinceLast)
+        Remote-->>Helper: 200 OK
         Helper-->>LFS: transfer resp (ok)
     end
 
-    %% Termination
+    Note over LFS,Remote: Complete data model push, Cleanup
     LFS->>Helper: terminate req
-
-   loop (Parallel) For each LFS file
-        Helper->>LocalStorage: Copy LFS OCI layer
-        LocalStorage->>Remote: Push LFS OCI layer
-        Remote-->>LocalStorage: 200 OK
-    end
 
     Helper->>Remote: Push LFS manifest
     Remote-->>Helper: 200 OK
