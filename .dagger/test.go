@@ -6,8 +6,6 @@ import (
 )
 
 // Run tests.
-//
-//nolint:staticcheck
 func (g *Gnoci) Test() *Test {
 	return &Test{
 		Gnoci: g,
@@ -20,8 +18,6 @@ type Test struct {
 }
 
 // Run all tests.
-//
-//nolint:staticcheck
 func (t *Test) All(ctx context.Context) (string, error) {
 	unitResults, unitErr := t.Unit(ctx)
 
@@ -33,8 +29,6 @@ func (t *Test) All(ctx context.Context) (string, error) {
 }
 
 // Run unit tests.
-//
-//nolint:staticcheck
 func (t *Test) Unit(ctx context.Context) (string, error) {
 	return dag.Go(). //nolint:wrapcheck
 				WithSource(t.Source).
