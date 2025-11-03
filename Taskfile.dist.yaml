@@ -8,14 +8,14 @@ tasks:
     env:
       GNOCI_BUILD_PATH: bin/git-remote-oci
     cmds:
-      - dagger call build export --path {{ .GNOCI_GIT_BUILD_PATH }}
+      - dagger call build-git export --path {{ .GNOCI_GIT_BUILD_PATH }}
 
   build-git-lfs:
     desc: "Build from source."
     env:
       GNOCI_BUILD_PATH: bin/git-lfs-remote-oci
     cmds:
-      - go build -o {{ .GNOCI_GIT_LFS_BUILD_PATH }} ./cmd/git-lfs-remote-oci
+      - dagger call build-git-lfs export --path {{ .GNOCI_GIT_LFS_BUILD_PATH }}
 
   coverage:
     desc: "Generage code coverage treemap, a visual aid."
