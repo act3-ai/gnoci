@@ -1,6 +1,6 @@
 {
   "name": "gnoci",
-  "engineVersion": "v0.18.17",
+  "engineVersion": "v0.19.4",
   "sdk": {
     "source": "go"
   },
@@ -41,5 +41,6 @@
       "pin": "1828f0be7b67d0475993f49a9c8b5a3e54877daf"
     }
   ],
-  "source": ".dagger"
+  "source": ".dagger",
+  "disableDefaultFunctionCaching": true
 }
