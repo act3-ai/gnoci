@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"dagger/gnoci/internal/dagger"
-	"fmt"
 	"path/filepath"
-
-	"github.com/sourcegraph/conc/pool"
+	"strings"
 )
 
 // Run tests.
@@ -71,22 +69,33 @@ func (t *Test) CoverageTreeMap(ctx context.Context,
 	return dag.File(coverageTreemapFile, svg)
 }
 
-func (t *Test) PushFetch(ctx context.Context,
+// Push pushes a git repository to an OCI registry.
+func (t *Test) Push(ctx context.Context,
 	// Git reference to test repository
 	gitRef *dagger.GitRef,
 ) (string, error) {
-	const srcDir = "test-src"
-	src := gitRef.Tree()
-
-	// get container with git-remote-oci and git-lfs-remote-oci
-	ctr, err := t.containerWithHelpers(ctx)
+	// start registry
+	regService := registryService()
+	regService, err := regService.Start(ctx)
 	if err != nil {
-		return "", fmt.Errorf("creating test container: %w", err)
+		return "", err
 	}
+	defer regService.Stop(ctx)
 
-	// add test source
-	ctr = ctr.WithDirectory(srcDir, src).
-		WithWorkdir(srcDir)
+	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
+	if err != nil {
+		return "", err
+	}
+	regHost := strings.TrimPrefix(regEndpoint, "http://")
+
+	const srcDir = "src"
+	return t.containerWithHelpers(ctx).
+		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
+		WithWorkdir(srcDir).
+		WithServiceBinding("registry", regService).
+		With(configureLFSOCIFunc(regHost)).
+		WithExec([]string{"git", "push", "oci://" + regHost + "/repo/test:sync", "--all"}).
+		Stdout(ctx)
 
 	// configure git
 
@@ -96,52 +105,50 @@ func (t *Test) PushFetch(ctx context.Context,
 
 	// push
 
-	// pull (in second dir or another container?)
-
 	// get metadata
 
 	// return metadata on stdout
 
-	return "", fmt.Errorf("not implemented")
+	// return "", fmt.Errorf("not implemented")
 }
 
-// containerWithHelpers creates a container with git-remote-oci and git-lfs-remote-oci.
-func (t *Test) containerWithHelpers(ctx context.Context) (*dagger.Container, error) {
+// containerWithHelpers creates a container with the dependencies necessary to test
+// git-remote-oci and git-lfs-remote-oci.
+func (t *Test) containerWithHelpers(ctx context.Context) *dagger.Container {
 	platform := dagger.Platform("linux/amd64")
+	version := "test-dev"
 
-	var gitHelper, gitLFSHelper *dagger.File
-	var gitHelperName, gitLFSHelperName string
-	p := pool.New().WithContext(ctx)
-	p.Go(func(ctx context.Context) error {
-		gitHelper = t.BuildGit(ctx, "test-dev", platform)
-
-		var err error
-		gitHelperName, err = gitHelper.Name(ctx)
-		if err != nil {
-			return fmt.Errorf("determining name of git helper exec: %w", err)
-		}
-		return nil
-	})
-
-	p.Go(func(ctx context.Context) error {
-		gitLFSHelper = t.BuildGitLFS(ctx, "test-dev", platform)
-
-		var err error
-		gitLFSHelperName, err = gitLFSHelper.Name(ctx)
-		if err != nil {
-			return fmt.Errorf("determining name of git-lfs helper exec: %w", err)
-		}
-		return nil
-	})
-
-	_ = p.Wait() // throw away err, as we can't get one
-
-	return dag.Alpine(dagger.AlpineOpts{
-		Packages: []string{"git", "git-lfs"},
-	}).
+	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git", "git-lfs"}}).
 		Container().
-		WithFile(filepath.Join("usr", "local", "bin", gitHelperName), gitHelper).
-		WithFile(filepath.Join("usr", "local", "bin", gitLFSHelperName), gitLFSHelper), nil
+		WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, version, platform)).
+		WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, version, platform)).
+		WithExec([]string{"git", "config", "--global", "user.name", "dev-test"}).
+		WithExec([]string{"git", "config", "--global", "user.email", "devtest@example.com"}).
+		WithExec([]string{"git", "config", "--global", "init.defaultbranch", "main"})
+}
+
+// configureLFSOCIFunc configures a git repository with an OCI remote.
+func configureLFSOCIFunc(ociRemote string) func(c *dagger.Container) *dagger.Container {
+	return func(c *dagger.Container) *dagger.Container {
+		return c.WithExec([]string{"git", "config", "lfs.standalonetransferagent", "oci"}).
+			WithExec([]string{"git", "config", "lfs.customtransfer.oci.path", gitLFSExecName}).
+			WithExec([]string{"git", "config", "lfs.customtransfer.oci.batch", "false"}).
+			WithExec([]string{"git", "config", "lfs.customtransfer.oci.concurrent", "false"}).
+			WithExec([]string{"git", "config", "lfs.url", "oci://" + ociRemote})
+	}
+}
+
+// https://hub.docker.com/_/registry
+const (
+	imageRegistry = "docker.io/library/registry:3.0"
+	registryPort  = 5000
+)
+
+func registryService() *dagger.Service {
+	return dag.Container().
+		From(imageRegistry).
+		WithExposedPort(registryPort).
+		AsService()
 }
 
 // func (t *Test) TestCtr(ctx context.Context) (*dagger.Container, error) {
