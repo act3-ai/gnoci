@@ -6,6 +6,11 @@
   },
   "dependencies": [
     {
+      "name": "alpine",
+      "source": "github.com/dagger/dagger/modules/alpine@v0.19.4",
+      "pin": "f76b1d49fbc0fbdfaf9e95b5fe744cebec1e1ea9"
+    },
+    {
       "name": "git-cliff",
       "source": "github.com/act3-ai/dagger/git-cliff@git-cliff/v0.1.2",
       "pin": "86ec5dc4ee1fd4d168d51946bc82aa4110cc8d96"
