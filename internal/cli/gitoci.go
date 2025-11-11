@@ -26,9 +26,15 @@ func NewCLI(version string) *cobra.Command {
 				address = args[1]
 			}
 
-			config.EnvPathOr("GNOCI_CONFIG", config.DefaultConfigSearchPath("gnoci", "config.yaml"))
-
-			action := actions.NewGnOCI(cmd.InOrStdin(), cmd.OutOrStdout(), os.Getenv("GIT_DIR"), name, address, version)
+			action := actions.NewGnOCI(
+				cmd.InOrStdin(),
+				cmd.OutOrStdout(),
+				os.Getenv("GIT_DIR"),
+				name,
+				address,
+				version,
+				config.EnvPathOr("GNOCI_CONFIG", config.DefaultConfigSearchPath("gnoci", "config.yaml")),
+			)
 			return action.Run(cmd.Context())
 		},
 	}

@@ -29,13 +29,13 @@ type RegistryConfig struct {
 // Registry contains the custom configuration for a registry.
 type Registry struct {
 	// PlainHTTP enables http endpoints.
-	PlainHTTP bool
+	PlainHTTP bool `json:"plainHTTP,omitempty"`
 
 	// NonCompliant indicates a registry is not OCI compliant.
 	NonCompliant bool `json:"noncompliant,omitempty"`
 }
 
-// ConfigurationDefault the fields in Configuration.  The argument must be a Configuration.
+// ConfigurationDefault defaults the fields in [Configuration].
 func ConfigurationDefault(obj *Configuration) {
 	if obj == nil {
 		obj = &Configuration{}
