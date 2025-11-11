@@ -12,24 +12,31 @@ import (
 	"path/filepath"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/registry"
 
 	"github.com/act3-ai/gnoci/internal/lfs"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
+	"github.com/act3-ai/go-common/pkg/config"
 	"github.com/go-git/go-git/v5"
 	"github.com/opencontainers/go-digest"
 )
 
 // GitLFS represents the base action.
 type GitLFS struct {
+	version   string
+	apiScheme *runtime.Scheme
+	// ConfigFiles contains a list of potential configuration file locations.
+	ConfigFiles []string
+
 	// OCI remote
 	gt     oras.GraphTarget
 	remote model.LFSModeler
 	in     *bufio.Scanner
 	out    io.Writer
-
-	version string
 }
 
 // NewGitLFS creates a new Tool with default values.
@@ -77,9 +84,19 @@ func (action *GitLFS) Run(ctx context.Context) error {
 	remoteName := strings.TrimPrefix(remoteURLs[0], "oci://")
 	slog.DebugContext(ctx, "resolved remote URL", "url", remoteName)
 
+	cfg, err := action.GetConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("getting configuration: %w", err)
+	}
+
+	parsedRef, err := registry.ParseReference(remoteName)
+	if err != nil {
+		return fmt.Errorf("invalid reference %s: %w", remoteName, err)
+	}
+
 	var fstorePath string
 	var fstore *file.Store
-	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, remoteName)
+	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, parsedRef, repoOptsFromConfig(parsedRef.Host(), cfg))
 	if err != nil {
 		return fmt.Errorf("initializing: %w", err)
 	}
@@ -332,4 +349,25 @@ func (action *GitLFS) readLine() ([]byte, error) {
 
 func withNewline(line []byte) []byte {
 	return append(line, []byte("\n")...)
+}
+
+// GetScheme returns the runtime scheme used for configuration file loading.
+func (action *GitLFS) GetScheme() *runtime.Scheme {
+	return action.apiScheme
+}
+
+// GetConfig loads Configuration using the current git-remote-oci options.
+func (action *GitLFS) GetConfig(ctx context.Context) (c *v1alpha1.Configuration, err error) {
+	c = &v1alpha1.Configuration{}
+
+	slog.DebugContext(ctx, "searching for configuration files", slog.Any("cfgFiles", action.ConfigFiles))
+
+	err = config.Load(slog.Default(), action.GetScheme(), c, action.ConfigFiles)
+	if err != nil {
+		return c, fmt.Errorf("loading configuration: %w", err)
+	}
+
+	defer slog.DebugContext(ctx, "using config", slog.Any("configuration", c))
+
+	return c, nil
 }

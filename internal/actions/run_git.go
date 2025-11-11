@@ -65,7 +65,7 @@ func (action *Git) Run(ctx context.Context) error {
 		return fmt.Errorf("invalid reference %s: %w", action.address, err)
 	}
 
-	gt, fstorePath, fstore, err := initRemoteConn(ctx, action.address, repoOptsFromConfig(parsedRef.Host(), cfg))
+	gt, fstorePath, fstore, err := initRemoteConn(ctx, parsedRef, repoOptsFromConfig(parsedRef.Host(), cfg))
 	if err != nil {
 		return fmt.Errorf("initializing: %w", err)
 	}
