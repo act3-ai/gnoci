@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/act3-ai/gnoci/internal/actions"
+	"github.com/act3-ai/go-common/pkg/config"
 )
 
 // NewCLI creates the base git-remote-oci command.
@@ -25,7 +26,15 @@ func NewCLI(version string) *cobra.Command {
 				address = args[1]
 			}
 
-			action := actions.NewGnOCI(cmd.InOrStdin(), cmd.OutOrStdout(), os.Getenv("GIT_DIR"), name, address, version)
+			action := actions.NewGnOCI(
+				cmd.InOrStdin(),
+				cmd.OutOrStdout(),
+				os.Getenv("GIT_DIR"),
+				name,
+				address,
+				version,
+				config.EnvPathOr("GNOCI_CONFIG", config.DefaultConfigSearchPath("gnoci", "config.yaml")),
+			)
 			return action.Run(cmd.Context())
 		},
 	}

@@ -12,12 +12,21 @@ import (
 	"github.com/act3-ai/gnoci/internal/cmd"
 	"github.com/act3-ai/gnoci/internal/ociutil"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/pkg/apis"
+	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
+	"github.com/act3-ai/go-common/pkg/config"
 	"github.com/go-git/go-git/v5"
+	"k8s.io/apimachinery/pkg/runtime"
 	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/registry"
 )
 
 // GnOCI represents the base action.
 type GnOCI struct {
+	version   string
+	apiScheme *runtime.Scheme
+	// ConfigFiles contains a list of potential configuration file locations.
+	ConfigFiles []string
 	// TODO: Could be dangerous when storing in struct like this... mutex?
 	batcher cmd.BatchReadWriter
 
@@ -26,29 +35,47 @@ type GnOCI struct {
 	local  *git.Repository
 
 	// OCI remote
-	name   string // may have same value as address
-	addess string
-	remote model.Modeler
-
-	version string
+	name    string // may have same value as address
+	address string
+	remote  model.Modeler
 }
 
 // NewGnOCI creates a new Tool with default values.
-func NewGnOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version string) *GnOCI {
+func NewGnOCI(in io.Reader, out io.Writer, gitDir, shortname, address, version string, cfgFiles []string) *GnOCI {
 	return &GnOCI{
-		batcher: cmd.NewBatcher(in, out),
-		gitDir:  gitDir,
-		name:    shortname,
-		addess:  strings.TrimPrefix(address, "oci://"),
-		version: version,
+		version:     version,
+		apiScheme:   apis.NewScheme(),
+		ConfigFiles: cfgFiles,
+		batcher:     cmd.NewBatcher(in, out),
+		gitDir:      gitDir,
+		name:        shortname,
+		address:     strings.TrimPrefix(address, "oci://"),
 	}
 }
 
 // Run runs the the primary git-remote-oci action.
 func (action *GnOCI) Run(ctx context.Context) error {
+	cfg, err := action.GetConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("getting configuration: %w", err)
+	}
+
+	parsedRef, err := registry.ParseReference(action.address)
+	if err != nil {
+		return fmt.Errorf("invalid reference %s: %w", action.address, err)
+	}
+
+	opts := repoOptsFromConfig(parsedRef.Host(), cfg)
+
+	slog.DebugContext(ctx, "loaded repository options from configuration",
+		slog.String("userAgent", opts.UserAgent),
+		slog.Bool("plainHTTP", opts.PlainHTTP),
+		slog.Bool("nonCompliant", opts.NonCompliant),
+	)
+
 	// TODO: This is a bit early, but sync.Once seems too much
 	// TODO: The next 5 "sections" are alot of setup that should be condensed
-	gt, err := ociutil.NewGraphTarget(ctx, action.addess)
+	gt, err := ociutil.NewGraphTarget(ctx, parsedRef, opts)
 	if err != nil {
 		return fmt.Errorf("initializing remote graph target: %w", err)
 	}
@@ -153,7 +180,7 @@ func (action *GnOCI) handleList(ctx context.Context, gc cmd.Git) error {
 		}
 	}
 
-	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+	if err := action.remote.FetchOrDefault(ctx, action.address); err != nil {
 		return err
 	}
 
@@ -177,11 +204,11 @@ func (action *GnOCI) handlePush(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := action.remote.FetchOrDefault(ctx, action.addess); err != nil {
+	if err := action.remote.FetchOrDefault(ctx, action.address); err != nil {
 		return err
 	}
 
-	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.addess, fullBatch, action.batcher); err != nil {
+	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.address, fullBatch, action.batcher); err != nil {
 		return fmt.Errorf("running push commands: %w", err)
 	}
 
@@ -200,9 +227,44 @@ func (action *GnOCI) handleFetch(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := cmd.HandleFetch(ctx, local, action.remote, action.addess, fullBatch, action.batcher); err != nil {
+	if err := cmd.HandleFetch(ctx, local, action.remote, action.address, fullBatch, action.batcher); err != nil {
 		return fmt.Errorf("running fetch command: %w", err)
 	}
 
 	return nil
+}
+
+// GetScheme returns the runtime scheme used for configuration file loading.
+func (action *GnOCI) GetScheme() *runtime.Scheme {
+	return action.apiScheme
+}
+
+// GetConfig loads Configuration using the current git-remote-oci options.
+func (action *GnOCI) GetConfig(ctx context.Context) (c *v1alpha1.Configuration, err error) {
+	c = &v1alpha1.Configuration{}
+
+	slog.DebugContext(ctx, "searching for configuration files", slog.Any("cfgFiles", action.ConfigFiles))
+
+	err = config.Load(slog.Default(), action.GetScheme(), c, action.ConfigFiles)
+	if err != nil {
+		return c, fmt.Errorf("loading configuration: %w", err)
+	}
+
+	defer slog.DebugContext(ctx, "using config", slog.Any("configuration", c))
+
+	return c, nil
+}
+
+func repoOptsFromConfig(host string, cfg *v1alpha1.Configuration) *ociutil.RepositoryOptions {
+	repoOpts := &ociutil.RepositoryOptions{
+		UserAgent: ociutil.GitUserAgent,
+	}
+
+	regCfg, ok := cfg.RegistryConfig.Registries[host]
+	if ok {
+		repoOpts.PlainHTTP = regCfg.PlainHTTP
+		repoOpts.NonCompliant = regCfg.NonCompliant
+	}
+
+	return repoOpts
 }

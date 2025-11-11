@@ -26,6 +26,28 @@ $ cd path/to/local/repo
 $ git remote add <name> oci://<registry>/<repository>/<name>:tag
 ```
 
+### Additional Configuration
+
+Additional configuration may be done via a config file.
+
+Default config file paths, overriden by `GNOCI_CONFIG`, in order of precendence:
+
+- `gnoci-config.yaml`
+- `$XDG_CONFIG_HOME/gnoci/config.yaml` or `$HOME/.config/gnoci/config.yaml`
+- `/etc/gnoci/config.yaml`
+
+### Example File Configuration
+
+```yaml
+apiVersion: gnoci.act3-ai.io/v1alpha1
+kind: Configuration
+
+registryConfig:
+  registries:
+    127.0.0.1:5000:
+        plainHTTP: true
+```
+
 ## Usage
 
 ### Configured OCI Remote

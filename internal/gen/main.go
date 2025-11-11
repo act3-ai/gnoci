@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/act3-ai/gnoci/pkg/apis"
+	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
 
 	"github.com/act3-ai/go-common/pkg/genschema"
 )
@@ -22,8 +23,8 @@ func main() {
 	if err := genschema.GenerateGroupSchemas(
 		os.Args[1],
 		scheme,
-		[]string{"gnoci.act3-ai.io"},
-		"github.com/act3-ai/gnoci",
+		[]string{v1alpha1.Group},
+		v1alpha1.Repository,
 	); err != nil {
 		log.Fatal(fmt.Errorf("JSON Schema generation failed: %w", err))
 	}
