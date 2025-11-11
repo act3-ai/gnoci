@@ -19,6 +19,7 @@ import (
 
 	"github.com/act3-ai/gnoci/internal/lfs"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/pkg/apis"
 	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
 	"github.com/act3-ai/go-common/pkg/config"
 	"github.com/go-git/go-git/v5"
@@ -40,11 +41,13 @@ type GitLFS struct {
 }
 
 // NewGitLFS creates a new Tool with default values.
-func NewGitLFS(in io.Reader, out io.Writer, version string) *GitLFS {
+func NewGitLFS(in io.Reader, out io.Writer, version string, cfgFiles []string) *GitLFS {
 	return &GitLFS{
-		in:      bufio.NewScanner(in),
-		out:     out,
-		version: version,
+		version:     version,
+		apiScheme:   apis.NewScheme(),
+		ConfigFiles: cfgFiles,
+		in:          bufio.NewScanner(in),
+		out:         out,
 	}
 }
 
@@ -72,26 +75,33 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("opening local repository: %w", err)
 	}
 
-	// Look up the remote by name
-	remote, err := repo.Remote(initReq.Remote)
-	if err != nil {
-		return fmt.Errorf("resolving remote URL for %s: %w", initReq.Remote, err)
+	var remoteURL string
+	if strings.HasPrefix(initReq.Remote, "oci://") {
+		slog.DebugContext(ctx, "received full remote URL", slog.String("url", initReq.Remote))
+		remoteURL = strings.TrimPrefix(initReq.Remote, "oci://")
+	} else {
+		slog.DebugContext(ctx, "received remote shortname", slog.String("shortname", initReq.Remote))
+		// Look up the remote by name
+		remote, err := repo.Remote(strings.TrimPrefix(initReq.Remote, "oci://")) // sanity?
+		if err != nil {
+			return fmt.Errorf("resolving remote URL for %s: %w", initReq.Remote, err)
+		}
+		remoteURLs := remote.Config().URLs
+		if len(remoteURLs) < 1 {
+			return fmt.Errorf("no URLs configured for remote %s", initReq.Remote)
+		}
+		remoteURL = strings.TrimPrefix(remoteURLs[0], "oci://") // TODO: do we just push to multiple if more than one URL is provided? How would git-remote-oci handle this?
+		slog.DebugContext(ctx, "resolved remote URL", "url", remoteURL)
 	}
-	remoteURLs := remote.Config().URLs
-	if len(remoteURLs) < 1 {
-		return fmt.Errorf("no URLs configured for remote %s", initReq.Remote)
-	}
-	remoteName := strings.TrimPrefix(remoteURLs[0], "oci://")
-	slog.DebugContext(ctx, "resolved remote URL", "url", remoteName)
 
 	cfg, err := action.GetConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("getting configuration: %w", err)
 	}
 
-	parsedRef, err := registry.ParseReference(remoteName)
+	parsedRef, err := registry.ParseReference(remoteURL)
 	if err != nil {
-		return fmt.Errorf("invalid reference %s: %w", remoteName, err)
+		return fmt.Errorf("invalid reference %s: %w", remoteURL, err)
 	}
 
 	var fstorePath string
@@ -111,7 +121,7 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		}
 	}()
 
-	action.remote = model.NewLFSModeler(remoteName, fstore, action.gt)
+	action.remote = model.NewLFSModeler(remoteURL, fstore, action.gt)
 
 	if err := action.remote.FetchOrDefault(ctx); err != nil {
 		return fmt.Errorf("fetching base git OCI metadata: %w", err)
