@@ -29,8 +29,7 @@ type Ticker struct {
 }
 
 // NewTicker returns a [Ticker] reporting an [Evaluator]'s [Progress] on an interval.
-func NewTicker(ctx context.Context, eval Evaluator, d time.Duration) *Ticker {
-	ch := make(chan Progress)
+func NewTicker(ctx context.Context, eval Evaluator, d time.Duration, ch chan<- Progress) {
 	t := time.NewTicker(d)
 
 	go func() {
@@ -52,6 +51,4 @@ func NewTicker(ctx context.Context, eval Evaluator, d time.Duration) *Ticker {
 			}
 		}
 	}()
-
-	return &Ticker{C: ch}
 }

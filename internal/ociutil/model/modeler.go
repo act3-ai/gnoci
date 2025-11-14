@@ -253,7 +253,7 @@ func (m *model) Push(ctx context.Context, updateSubject bool) (ocispec.Descripto
 			slog.ErrorContext(ctx, "failed to fetch LFS manifest", slog.String("error", err.Error()))
 		default:
 			m.manDesc = manDesc // update subject to new git descriptor
-			_, err = m.PushLFS(ctx)
+			_, err = m.PushLFSManifest(ctx)
 			if err != nil {
 				return ocispec.Descriptor{}, fmt.Errorf("pushing LFS manifest: %w", err)
 			}

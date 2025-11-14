@@ -19,6 +19,7 @@ import (
 
 	"github.com/act3-ai/gnoci/internal/lfs"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/internal/progress"
 	"github.com/act3-ai/gnoci/pkg/apis"
 	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
 	"github.com/act3-ai/go-common/pkg/config"
@@ -245,19 +246,33 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.UploadEvent)
 		}
 
-		if _, err := action.remote.AddLFSFile(ctx, transferReq.Path); err != nil {
+		pChan := make(chan progress.Progress)
+		done := make(chan struct{})
+
+		go func() {
+			for pUpdate := range pChan {
+				action.writeProgress(ctx, transferReq.Oid, pUpdate.Total, pUpdate.Delta)
+			}
+			done <- struct{}{}
+		}()
+
+		pushOpts := &model.PushLFSOptions{
+			Progress: &model.ProgressOptions{
+				Info: pChan,
+			},
+		}
+		if _, err := action.remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
 			action.writeTransferResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
+			<-done
 			continue
 		}
-
-		// HACK: is this necessary? per the spec, we "should"
-		action.writeProgress(ctx, transferReq.Oid, 1, 1)
+		<-done
 
 		// notify completion
 		action.writeTransferResponse(ctx, transferReq.Oid, "", nil)
 	}
 
-	_, err := action.remote.PushLFS(ctx)
+	_, err := action.remote.PushLFSManifest(ctx)
 	if err != nil {
 		return fmt.Errorf("pushing LFS to OCI: %w", err)
 	}

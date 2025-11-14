@@ -8,15 +8,16 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"time"
 
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/sourcegraph/conc/pool"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/registry"
 
+	"github.com/act3-ai/gnoci/internal/progress"
 	"github.com/act3-ai/gnoci/pkg/oci"
 )
 
@@ -27,10 +28,11 @@ type LFSModeler interface {
 	// FetchLFS pulls git-lfs OCI metadata from a remote. It does not pull layers.
 	FetchLFS(ctx context.Context) error
 	FetchLFSOrDefault(ctx context.Context) error
-	// PushLFS upload the git-lfs OCI data model in it's current state.
-	PushLFS(ctx context.Context) (ocispec.Descriptor, error)
-	// AddLFSFile adds a git-lfs file as a layer to the git-lfs OCI data model.
-	AddLFSFile(ctx context.Context, path string) (ocispec.Descriptor, error)
+	// PushLFSManifest upload the git-lfs OCI data model in it's current state.
+	PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error)
+	// PushLFSFile adds a git-lfs file as a layer to the git-lfs OCI data model
+	// and pushes it to the remote.
+	PushLFSFile(ctx context.Context, path string, opts *PushLFSOptions) (ocispec.Descriptor, error)
 	// FetchLFSLayer fetches an LFS file from a layer in the git-lfs OCI data model.
 	FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
 }
@@ -104,35 +106,8 @@ func (m *model) FetchLFSOrDefault(ctx context.Context) error {
 	}
 }
 
-func (m *model) PushLFS(ctx context.Context) (ocispec.Descriptor, error) {
+func (m *model) PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "pushing LFS data model")
-
-	// if len(m.newLFS) < 1 {
-	// 	return *m.lfsMan.Subject, nil
-	// }
-
-	// TODO: plumb concurrency here
-	p := pool.New().WithErrors().WithContext(ctx)
-	for _, desc := range m.newLFS {
-		slog.DebugContext(ctx, "pushing LFS file", "digest", desc.Digest.String())
-		p.Go(func(ctx context.Context) error {
-			rc, err := m.fstore.Fetch(ctx, desc)
-			if err != nil {
-				return fmt.Errorf("fetching LFS file from temporary filestore: %w", err)
-			}
-			defer rc.Close()
-
-			if err := m.gt.Push(ctx, desc, rc); err != nil {
-				return fmt.Errorf("pushing LFS file: %w", err)
-			}
-
-			return nil
-		})
-
-	}
-	if err := p.Wait(); err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("pushing LFS files: %w", err)
-	}
 
 	// if deleteOld {
 	// 	// TODO: improve error handling
@@ -178,25 +153,76 @@ func (m *model) PushLFS(ctx context.Context) (ocispec.Descriptor, error) {
 	return lfsManDesc, nil
 }
 
-func (m *model) AddLFSFile(ctx context.Context, path string) (ocispec.Descriptor, error) {
-	slog.DebugContext(ctx, "adding LFS file", slog.String("oid", filepath.Base(path)))
+const defaultProgressInterval = time.Second / 2
 
-	// dedup
-	for _, desc := range m.lfsMan.Layers {
-		// HACK: this check smells bad
-		if desc.Digest.Encoded() == filepath.Base(path) {
-			return desc, nil
-		}
-	}
+// PushLFSOptions define optional parameters for pushing LFS files.
+type PushLFSOptions struct {
+	Progress *ProgressOptions
+}
 
-	desc, err := m.fstore.Add(ctx, filepath.Base(path), oci.MediaTypeLFSLayer, path)
+// ProgressOptions allow for enabling and customizing LFS file push progress info.
+type ProgressOptions struct {
+	// Info enable receiving status information on how many bytes has been pushed.
+	Info chan progress.Progress
+	// ProgressInterval is the sending tick rate for progress updates.
+	// Noop if Info is not set.
+	Interval time.Duration
+}
+
+func (m *model) PushLFSFile(ctx context.Context, path string, opts *PushLFSOptions) (ocispec.Descriptor, error) {
+	slog.DebugContext(ctx, "pushing and adding LFS file to data model", slog.String("oid", filepath.Base(path)))
+
+	// adding to an OCI file store:
+	// 1. provides a descriptor needed on push.
+	// 2. if the file already exists in the oci data model ensure no corruption.
+	// 3. safer, in the case the file is removed before we can read.
+	newDesc, err := m.fstore.Add(ctx, filepath.Base(path), oci.MediaTypeLFSLayer, path)
 	if err != nil {
 		return ocispec.Descriptor{}, fmt.Errorf("adding LFS file to intermediate fstore: %w", err)
 	}
 
+	// stay idempotent if the same LFS file is added multiple times.
+	for _, desc := range m.lfsMan.Layers {
+		// HACK: this check smells bad, but LFS should be providing use with
+		// the actual LFS file in .git/*
+		if desc.Digest.Encoded() == filepath.Base(path) {
+			// unlikely hash collision?
+			if desc.Size != newDesc.Size {
+				return ocispec.Descriptor{}, fmt.Errorf("found an existing LFS object digest with different size: digest = %s, existing file size = %d, got file size = %d", desc.Digest, desc.Size, newDesc.Size)
+			}
+			return desc, nil
+		}
+	}
+
+	rc, err := m.fstore.Fetch(ctx, newDesc)
+	if err != nil {
+		return ocispec.Descriptor{}, fmt.Errorf("fetching LFS file from temporary filestore: %w", err)
+	}
+	defer rc.Close()
+
+	r := progressOrDefault(ctx, opts.Progress, rc)
+	if err := m.gt.Push(ctx, newDesc, r); err != nil {
+		return ocispec.Descriptor{}, fmt.Errorf("pushing LFS file: %w", err)
+	}
+
 	// TODO: safe to assume the LFS manifest has already been pulled?
 	// TODO: this is a bug, we need to ensure deduplication of lfs files
-	m.lfsMan.Layers = append(m.lfsMan.Layers, desc)
-	m.newLFS = append(m.newLFS, desc)
-	return desc, nil
+	m.lfsMan.Layers = append(m.lfsMan.Layers, newDesc)
+	m.newLFS = append(m.newLFS, newDesc)
+	return newDesc, nil
+}
+
+// progressOrDefault returns a [progress.Ticker] if ProgressOptions have it enabled.
+func progressOrDefault(ctx context.Context, opts *ProgressOptions, r io.Reader) io.Reader {
+	if opts != nil && opts.Info != nil {
+		d := defaultProgressInterval
+		if opts.Interval != 0 {
+			d = opts.Interval
+		}
+
+		pReader := progress.NewReader(r)
+		progress.NewTicker(ctx, pReader, d, opts.Info)
+		return pReader
+	}
+	return r
 }
