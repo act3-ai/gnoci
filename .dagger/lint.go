@@ -10,8 +10,6 @@ import (
 )
 
 // Linting operations.
-//
-//nolint:staticcheck
 func (g *Gnoci) Lint() *Lint {
 	return &Lint{
 		Gnoci: g,
@@ -24,8 +22,6 @@ type Lint struct {
 }
 
 // Run all linters.
-//
-//nolint:staticcheck
 func (l *Lint) All(ctx context.Context,
 	// Source code directory
 	// +defaultPath="/"
@@ -68,16 +64,12 @@ func (l *Lint) All(ctx context.Context,
 }
 
 // Run govulncheck.
-//
-//nolint:staticcheck
 func (l *Lint) Vulncheck(ctx context.Context) (string, error) {
 	return dag.Govulncheck(). //nolint:wrapcheck
 					ScanSource(ctx, l.Source)
 }
 
 // Lint yaml files.
-//
-//nolint:staticcheck
 func (l *Lint) Yaml(ctx context.Context) (string, error) {
 	return dag.Container(). //nolint:wrapcheck
 				From("docker.io/cytopia/yamllint:1").
@@ -88,8 +80,6 @@ func (l *Lint) Yaml(ctx context.Context) (string, error) {
 }
 
 // Lint markdown files.
-//
-//nolint:staticcheck
 func (l *Lint) Markdown(ctx context.Context) (string, error) {
 	return dag.Container(). //nolint:wrapcheck
 				From("docker.io/davidanson/markdownlint-cli2:v0.14.0").
@@ -100,8 +90,6 @@ func (l *Lint) Markdown(ctx context.Context) (string, error) {
 }
 
 // Lint **/*.sh and **/*.bash files.
-//
-//nolint:staticcheck
 func (l *Lint) Shell(ctx context.Context) (string, error) {
 	// TODO: Consider adding an option for specifying script files that don't have the extension, such as WithShellScripts.
 	shEntries, err := l.Source.Glob(ctx, "**/*.sh")
@@ -139,8 +127,6 @@ func (l *Lint) Shell(ctx context.Context) (string, error) {
 }
 
 // Lint go files.
-//
-//nolint:staticcheck
 func (l *Lint) Go(ctx context.Context) (string, error) {
 	return dag.GolangciLint(). //nolint:wrapcheck
 					Run(l.Source, dagger.GolangciLintRunOpts{

@@ -13,7 +13,7 @@ import (
 	"github.com/act3-ai/go-common/pkg/runner"
 	vv "github.com/act3-ai/go-common/pkg/version"
 
-	"github.com/act3-ai/gnoci/cmd/git-remote-oci/cli"
+	"github.com/act3-ai/gnoci/cmd/git-lfs-remote-oci/cli"
 )
 
 // getVersionInfo retrieves build info.
@@ -28,9 +28,9 @@ func getVersionInfo() vv.Info {
 func main() {
 	ctx := context.Background()
 
-	info := getVersionInfo()                     // Load the version info from the build
-	root := cli.NewGitRemoteHelper(info.Version) // Create the root command
-	root.SilenceUsage = true                     // Silence usage when root is called
+	info := getVersionInfo()                        // Load the version info from the build
+	root := cli.NewGitLFSRemoteHelper(info.Version) // Create the root command
+	root.SilenceUsage = true                        // Silence usage when root is called
 
 	// Layout of embedded documentation to surface in the help command
 	// and generate in the gendocs command

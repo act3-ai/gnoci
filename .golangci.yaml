@@ -117,6 +117,10 @@ linters:
           - godot
           - wrapcheck
         path: (.+)_test.go
+      - path: ^.dagger
+        linters:
+          - staticcheck
+        text: ST1020
     paths:
       - third_party$
       - builtin$
