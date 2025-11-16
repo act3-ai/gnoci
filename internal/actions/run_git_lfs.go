@@ -52,6 +52,41 @@ func NewGitLFS(in io.Reader, out io.Writer, version string, cfgFiles []string) *
 	}
 }
 
+// resolveAddress trims an OCI URL or resolves a shortname to a URL.
+func resolveAddress(ctx context.Context, remote string, repo *git.Repository) (registry.Reference, error) {
+	var remoteURL string
+	if strings.HasPrefix(remote, "oci://") {
+		slog.DebugContext(ctx, "received full remote URL", slog.String("url", remote))
+		remoteURL = trimProtocol(remote)
+	} else {
+		slog.DebugContext(ctx, "received remote shortname", slog.String("shortname", remote))
+
+		// Look up the remote by name
+		remote, err := repo.Remote(trimProtocol(remote)) // sanity?
+		if err != nil {
+			return registry.Reference{}, fmt.Errorf("resolving remote URL for %s: %w", remote, err)
+		}
+		remoteURLs := remote.Config().URLs
+		if len(remoteURLs) < 1 {
+			return registry.Reference{}, fmt.Errorf("no URLs configured for remote %s", remote)
+		}
+		remoteURL = trimProtocol(remoteURLs[0]) // TODO: do we just push to multiple if more than one URL is provided? How would git-remote-oci handle this?
+		slog.DebugContext(ctx, "resolved remote URL", "url", remoteURL)
+	}
+
+	parsedRef, err := registry.ParseReference(remoteURL)
+	if err != nil {
+		return registry.Reference{}, fmt.Errorf("invalid reference %s: %w", remoteURL, err)
+	}
+
+	return parsedRef, nil
+}
+
+// trimProtocol trims a oci:// protocol prefix.
+func trimProtocol(remote string) string {
+	return strings.TrimPrefix(remote, "oci://")
+}
+
 // Run runs the the primary git-remote-oci action.
 func (action *GitLFS) Run(ctx context.Context) error {
 	slog.DebugContext(ctx, "running git-lfs-remote-oci")
@@ -76,23 +111,9 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("opening local repository: %w", err)
 	}
 
-	var remoteURL string
-	if strings.HasPrefix(initReq.Remote, "oci://") {
-		slog.DebugContext(ctx, "received full remote URL", slog.String("url", initReq.Remote))
-		remoteURL = strings.TrimPrefix(initReq.Remote, "oci://")
-	} else {
-		slog.DebugContext(ctx, "received remote shortname", slog.String("shortname", initReq.Remote))
-		// Look up the remote by name
-		remote, err := repo.Remote(strings.TrimPrefix(initReq.Remote, "oci://")) // sanity?
-		if err != nil {
-			return fmt.Errorf("resolving remote URL for %s: %w", initReq.Remote, err)
-		}
-		remoteURLs := remote.Config().URLs
-		if len(remoteURLs) < 1 {
-			return fmt.Errorf("no URLs configured for remote %s", initReq.Remote)
-		}
-		remoteURL = strings.TrimPrefix(remoteURLs[0], "oci://") // TODO: do we just push to multiple if more than one URL is provided? How would git-remote-oci handle this?
-		slog.DebugContext(ctx, "resolved remote URL", "url", remoteURL)
+	remote, err := resolveAddress(ctx, initReq.Remote, repo)
+	if err != nil {
+		return fmt.Errorf("resolving remote URL: %w", err)
 	}
 
 	cfg, err := action.GetConfig(ctx)
@@ -100,14 +121,9 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("getting configuration: %w", err)
 	}
 
-	parsedRef, err := registry.ParseReference(remoteURL)
-	if err != nil {
-		return fmt.Errorf("invalid reference %s: %w", remoteURL, err)
-	}
-
 	var fstorePath string
 	var fstore *file.Store
-	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, parsedRef, repoOptsFromConfig(parsedRef.Host(), cfg))
+	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, remote, repoOptsFromConfig(remote.Host(), cfg))
 	if err != nil {
 		return fmt.Errorf("initializing: %w", err)
 	}
@@ -122,7 +138,7 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		}
 	}()
 
-	action.remote = model.NewLFSModeler(remoteURL, fstore, action.gt)
+	action.remote = model.NewLFSModeler(remote, fstore, action.gt)
 
 	if err := action.remote.FetchOrDefault(ctx); err != nil {
 		return fmt.Errorf("fetching base git OCI metadata: %w", err)

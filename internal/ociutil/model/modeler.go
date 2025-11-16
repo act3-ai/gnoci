@@ -23,6 +23,7 @@ import (
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/errdef"
+	"oras.land/oras-go/v2/registry"
 )
 
 var (
@@ -72,11 +73,11 @@ type Modeler interface {
 }
 
 // NewModeler initializes a new git modeler.
-func NewModeler(ociRemote string, fstore *file.Store, gt oras.GraphTarget) Modeler {
+func NewModeler(remote registry.Reference, fstore *file.Store, gt oras.GraphTarget) Modeler {
 	return &model{
-		ociRemote: ociRemote,
-		gt:        gt,
-		fstore:    fstore,
+		remote: remote,
+		gt:     gt,
+		fstore: fstore,
 	}
 }
 
@@ -84,9 +85,9 @@ func NewModeler(ociRemote string, fstore *file.Store, gt oras.GraphTarget) Model
 //
 // Note: updates to Git OCI metadata are not concurrency safe.
 type model struct {
-	ociRemote string
-	gt        oras.GraphTarget
-	fstore    *file.Store
+	remote registry.Reference
+	gt     oras.GraphTarget
+	fstore *file.Store
 
 	// populated on fetch
 	fetched     bool
@@ -108,9 +109,9 @@ func (m *model) Fetch(ctx context.Context) error {
 
 	slog.DebugContext(ctx, "resolving manifest descriptor")
 	var err error
-	m.manDesc, err = m.gt.Resolve(ctx, m.ociRemote)
+	m.manDesc, err = m.gt.Resolve(ctx, m.remote.String())
 	if err != nil {
-		return fmt.Errorf("resolving manifest descriptor for remote %s: %w", m.ociRemote, err)
+		return fmt.Errorf("resolving manifest descriptor for remote %s: %w", m.remote, err)
 	}
 
 	slog.DebugContext(ctx, "fetching manifest")
@@ -259,11 +260,11 @@ func (m *model) Push(ctx context.Context, updateSubject bool) (ocispec.Descripto
 		}
 	}
 
-	if err := m.gt.Tag(ctx, manDesc, m.ociRemote); err != nil {
+	if err := m.gt.Tag(ctx, manDesc, m.remote.String()); err != nil {
 		return manDesc, fmt.Errorf("tagging base manifest: %w", err)
 	}
 
-	slog.DebugContext(ctx, "tagged git manifest", slog.String("digest", manDesc.Digest.String()), slog.String("reference", m.ociRemote))
+	slog.DebugContext(ctx, "tagged git manifest", slog.String("digest", manDesc.Digest.String()), slog.String("reference", m.remote.String()))
 
 	return manDesc, nil
 }

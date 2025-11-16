@@ -40,11 +40,11 @@ type LFSModeler interface {
 }
 
 // NewLFSModeler initializes a new git-lfs modeler.
-func NewLFSModeler(ociRemote string, fstore *file.Store, gt oras.GraphTarget) LFSModeler {
+func NewLFSModeler(remote registry.Reference, fstore *file.Store, gt oras.GraphTarget) LFSModeler {
 	return &model{
-		ociRemote: ociRemote,
-		gt:        gt,
-		fstore:    fstore,
+		remote: remote,
+		gt:     gt,
+		fstore: fstore,
 	}
 }
 

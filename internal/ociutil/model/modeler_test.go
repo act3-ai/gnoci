@@ -19,11 +19,16 @@ import (
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/content/memory"
 	"oras.land/oras-go/v2/errdef"
+	"oras.land/oras-go/v2/registry"
 
 	"github.com/act3-ai/gnoci/pkg/oci"
 )
 
-const fooRemote = "foo.bar.repo/foofoo/barbar:foo"
+var testRemote = registry.Reference{
+	Registry:   "reg.example.com",
+	Repository: "repo",
+	Reference:  "tag",
+}
 
 // setupRemote pushes a Git OCI artifact, returning anything needed for validation
 func setupRemote(t *testing.T, gt oras.GraphTarget) (ocispec.Manifest, oci.ConfigGit) {
@@ -98,7 +103,7 @@ func setupRemote(t *testing.T, gt oras.GraphTarget) (ocispec.Manifest, oci.Confi
 	err = gt.Push(t.Context(), manifestDesc, bytes.NewReader(manifestRaw))
 	assert.NoError(t, err)
 
-	err = gt.Tag(t.Context(), manifestDesc, fooRemote)
+	err = gt.Tag(t.Context(), manifestDesc, testRemote.String())
 	assert.NoError(t, err)
 
 	return manifest, config
@@ -117,7 +122,7 @@ func TestNewModeler(t *testing.T) {
 		}
 	}()
 
-	got := NewModeler(fooRemote, fstore, gt)
+	got := NewModeler(testRemote, fstore, gt)
 
 	model := got.(*model)
 
@@ -144,13 +149,13 @@ func Test_model_Fetch(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		remote string
+		remote registry.Reference
 		wantFn func(t *testing.T, m *model, err error)
 	}{
 		{
 			name:   "Success",
 			fields: fields{fetched: false},
-			remote: fooRemote,
+			remote: testRemote,
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -165,7 +170,7 @@ func Test_model_Fetch(t *testing.T) {
 		{
 			name:   "Already Fetched",
 			fields: fields{fetched: true},
-			remote: fooRemote,
+			remote: testRemote,
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -177,7 +182,11 @@ func Test_model_Fetch(t *testing.T) {
 		{
 			name:   "No Existing Manifest",
 			fields: fields{fetched: false},
-			remote: "this.artifact/does/not:exist",
+			remote: registry.Reference{
+				Registry:   "reg.dne",
+				Repository: "doesnotexist",
+				Reference:  "tag",
+			},
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -202,7 +211,7 @@ func Test_model_Fetch(t *testing.T) {
 			}()
 
 			m := &model{
-				ociRemote:   tt.remote,
+				remote:      tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -237,13 +246,13 @@ func Test_model_FetchOrDefault(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		remote string
+		remote registry.Reference
 		wantFn func(t *testing.T, m *model, err error)
 	}{
 		{
 			name:   "Success",
 			fields: fields{fetched: false},
-			remote: fooRemote,
+			remote: testRemote,
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -258,7 +267,7 @@ func Test_model_FetchOrDefault(t *testing.T) {
 		{
 			name:   "Already Fetched",
 			fields: fields{fetched: true},
-			remote: fooRemote,
+			remote: testRemote,
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -270,7 +279,11 @@ func Test_model_FetchOrDefault(t *testing.T) {
 		{
 			name:   "Defaulted",
 			fields: fields{fetched: false},
-			remote: "this.artifact/does/not:exist",
+			remote: registry.Reference{
+				Registry:   "reg.dne",
+				Repository: "doesnotexist",
+				Reference:  "tag",
+			},
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -317,7 +330,7 @@ func Test_model_FetchOrDefault(t *testing.T) {
 			}()
 
 			m := &model{
-				ociRemote:   tt.remote,
+				remote:      tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -348,13 +361,13 @@ func Test_model_FetchLayer(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		remote string
+		remote registry.Reference
 		wantFn func(t *testing.T, m *model, err error)
 	}{
 		{
 			name:   "Success",
 			fields: fields{fetched: false},
-			remote: fooRemote,
+			remote: testRemote,
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -365,7 +378,7 @@ func Test_model_FetchLayer(t *testing.T) {
 		{
 			name:   "Layer Not in Manifest",
 			fields: fields{fetched: true},
-			remote: fooRemote,
+			remote: testRemote,
 			wantFn: func(t *testing.T, m *model, err error) {
 				t.Helper()
 
@@ -389,7 +402,7 @@ func Test_model_FetchLayer(t *testing.T) {
 			}()
 
 			m := &model{
-				ociRemote:   tt.remote,
+				remote:      tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -499,7 +512,7 @@ func Test_model_Push(t *testing.T) {
 				assert.Equal(t, []ocispec.Descriptor{expectedLayerDesc}, m.newPacks)
 
 				// validate tag
-				gotManDesc, err := gt.Resolve(t.Context(), fooRemote)
+				gotManDesc, err := gt.Resolve(t.Context(), testRemote.String())
 				assert.NoError(t, err)
 				assert.Equal(t, expectedManDesc, gotManDesc)
 
@@ -533,7 +546,7 @@ func Test_model_Push(t *testing.T) {
 					rc.Close()
 				}
 
-				_, err = gt.Resolve(t.Context(), fooRemote)
+				_, err = gt.Resolve(t.Context(), testRemote.String())
 				assert.NoError(t, err)
 			},
 		},
@@ -557,9 +570,9 @@ func Test_model_Push(t *testing.T) {
 			gt := memory.New()
 
 			m := &model{
-				ociRemote: fooRemote,
-				gt:        gt,
-				fstore:    fstore,
+				remote: testRemote,
+				gt:     gt,
+				fstore: fstore,
 				man: ocispec.Manifest{
 					Layers: []ocispec.Descriptor{expectedLayerDesc},
 				},

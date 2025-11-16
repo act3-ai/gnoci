@@ -80,7 +80,7 @@ func (action *Git) Run(ctx context.Context) error {
 		}
 	}()
 
-	action.remote = model.NewModeler(action.address, fstore, gt)
+	action.remote = model.NewModeler(parsedRef, fstore, gt)
 
 	var done bool
 	for !done {
