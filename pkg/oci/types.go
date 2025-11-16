@@ -40,19 +40,10 @@ type ReferenceInfo struct {
 }
 
 // LFS OCI artifacts.
-// const (
-// 	// ArtifactTypeLFSManifest is the artifact type for an Git LFS manifest.
-// 	ArtifactTypeLFSManifest = "application/vnd.ai.act3.git-lfs.repo.v1+json"
+const (
+	// ArtifactTypeLFSManifest is the artifact type for an Git LFS manifest.
+	ArtifactTypeLFSManifest = "application/vnd.ai.act3.git-lfs.repo.v1+json"
 
-// 	// MediaTypeLFSConfig is the media type for a Git LFS config.
-// 	MediaTypeLFSConfig = "application/vnd.ai.act3.git-lfs.config.v1+json"
-
-// 	// MediaTypeLFSLayer is the media type used for Git LFS layers.
-// 	MediaTypeLFSLayer = "application/vnd.ai.act3.git-lfs.object.v1"
-// )
-
-// ConfigLFS is an OCI manifest config, containing information about which commits an LFS file is associated with.
-// type ConfigLFS struct {
-// 	// Refs map Git references to layers containing LFS files.
-// 	Refs map[string][]string `json:"refs"`
-// }
+	// MediaTypeLFSLayer is the media type used for Git LFS layers.
+	MediaTypeLFSLayer = "application/vnd.ai.act3.git-lfs.object.v1"
+)

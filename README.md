@@ -8,10 +8,11 @@
 
 Pronounced as [gnocchi](https://www.merriam-webster.com/dictionary/gnocchi).
 
-This project has two main objectives:
+This project has three main objectives:
 
 1. Define a specification for storing Git repositories as OCI artifacts.
 2. Implement a Git remote helper to facilitate conversions of local Git repositories into remote OCI artifacts.
+3. Implement a Git LFS remote helper to support conversions of Git LFS pointer files.
 
 ## Git as OCI Specification
 
@@ -22,7 +23,7 @@ A full specification is in progress. Please refer to the prototype [data model](
 > [!WARNING]
 > `git-remote-oci` is in early stages of development. Bugs are present, and inefficiencies are known to exist.
 
-`git-remote-oci` is a Git remote helper that implements a custom protocol for interacting with Git repositories stored in OCI compliant registries. It is designed to allow users to interact with `git` as they normally do in their day-to-day workflows, but use an OCI registry as remote storage.
+`git-remote-oci` is a Git [remote helper](https://git-scm.com/docs/gitremote-helpers) that implements a custom protocol for interacting with Git repositories stored in OCI compliant registries. It is designed to allow users to interact with `git` as they normally do in their day-to-day workflows, but use an OCI registry as remote storage.
 
 `git-remote-oci` supports:
 
@@ -30,6 +31,13 @@ A full specification is in progress. Please refer to the prototype [data model](
 - Fetching/Pulling
 - Pushing
 - Evaluating remote references
+
+## Git LFS Remote Helper for OCI Registries
+
+> [!WARNING]
+> `git-lfs-remote-oci` is in early stages of development. Bugs are present, and inefficiencies are known to exist.
+
+`git-lfs-remote-oci` is a Git LFS [custom transfer agent](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md) that implements the Git LFS [custom transfer protocol](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#protocol). Specifically, it is a [standalone transfer agent](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#using-a-custom-transfer-type-without-the-api-server) that does not require an LFS API server.
 
 ## Purpose
 

@@ -73,7 +73,7 @@ func HandlePush(ctx context.Context, local *git.Repository, localDir string, rem
 		return fmt.Errorf("adding packfile to OCI data model: %w", err)
 	}
 
-	desc, err := remote.Push(ctx, remoteAddress)
+	desc, err := remote.Push(ctx, true)
 	if err != nil {
 		return fmt.Errorf("pushing to remote: %w", err)
 	}

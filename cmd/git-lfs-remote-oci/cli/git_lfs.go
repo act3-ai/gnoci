@@ -7,7 +7,7 @@ import (
 	"github.com/act3-ai/gnoci/internal/cli"
 )
 
-// NewGitRemoteHelper creates the base git-remote-oci command.
-func NewGitRemoteHelper(version string) *cobra.Command {
-	return cli.NewGitCLI(version)
+// NewGitLFSRemoteHelper creates the base git-remote-oci command.
+func NewGitLFSRemoteHelper(version string) *cobra.Command {
+	return cli.NewGitLFSCLI(version)
 }
