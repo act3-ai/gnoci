@@ -88,6 +88,7 @@ func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadC
 }
 
 func (m *model) FetchLFSOrDefault(ctx context.Context) error {
+	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
 	err := m.FetchLFS(ctx)
 	switch {
 	case errors.Is(err, ErrLFSManifestNotFound):

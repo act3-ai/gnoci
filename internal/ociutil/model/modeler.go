@@ -107,21 +107,21 @@ func (m *model) Fetch(ctx context.Context) error {
 		return nil
 	}
 
-	slog.DebugContext(ctx, "resolving manifest descriptor")
+	slog.DebugContext(ctx, "resolving base manifest descriptor")
 	var err error
 	m.manDesc, err = m.gt.Resolve(ctx, m.remote.String())
 	if err != nil {
-		return fmt.Errorf("resolving manifest descriptor for remote %s: %w", m.remote, err)
+		return fmt.Errorf("resolving basae manifest descriptor for remote %s: %w", m.remote, err)
 	}
 
-	slog.DebugContext(ctx, "fetching manifest")
+	slog.DebugContext(ctx, "fetching base manifest")
 	manRaw, err := content.FetchAll(ctx, m.gt, m.manDesc)
 	if err != nil {
-		return fmt.Errorf("fetching manifest: %w", err)
+		return fmt.Errorf("fetching base manifest: %w", err)
 	}
 
 	if err := json.Unmarshal(manRaw, &m.man); err != nil {
-		return fmt.Errorf("decoding manifest: %w", err)
+		return fmt.Errorf("decoding base manifest: %w", err)
 	}
 
 	slog.DebugContext(ctx, "fetching config")
@@ -145,6 +145,7 @@ func (m *model) cleanupTempManifest() {
 }
 
 func (m *model) FetchOrDefault(ctx context.Context) error {
+	slog.DebugContext(ctx, "fetching base manifest or defaulting")
 	err := m.Fetch(ctx)
 	switch {
 	case errors.Is(err, errdef.ErrNotFound):
@@ -177,7 +178,7 @@ func (m *model) FetchOrDefault(ctx context.Context) error {
 }
 
 func (m *model) FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
-	slog.DebugContext(ctx, "fetching packfile", slog.String("digest", dgst.String()))
+	slog.DebugContext(ctx, "fetching packfile OCI layer", slog.String("digest", dgst.String()))
 	// TODO: reverse iter? it is more likely we'll want to fetch newer layers
 	for _, desc := range m.man.Layers {
 		if desc.Digest == dgst {

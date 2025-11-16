@@ -144,7 +144,6 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("fetching base git OCI metadata: %w", err)
 	}
 
-	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
 	if err := action.remote.FetchLFSOrDefault(ctx); err != nil {
 		return err
 	}
