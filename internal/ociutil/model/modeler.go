@@ -98,7 +98,6 @@ type model struct {
 
 	lfsMan     ocispec.Manifest
 	lfsManDesc ocispec.Descriptor
-	newLFS     []ocispec.Descriptor
 }
 
 func (m *model) Fetch(ctx context.Context) error {

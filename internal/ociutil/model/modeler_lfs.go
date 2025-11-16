@@ -205,10 +205,7 @@ func (m *model) PushLFSFile(ctx context.Context, path string, opts *PushLFSOptio
 		return ocispec.Descriptor{}, fmt.Errorf("pushing LFS file: %w", err)
 	}
 
-	// TODO: safe to assume the LFS manifest has already been pulled?
-	// TODO: this is a bug, we need to ensure deduplication of lfs files
 	m.lfsMan.Layers = append(m.lfsMan.Layers, newDesc)
-	m.newLFS = append(m.newLFS, newDesc)
 	return newDesc, nil
 }
 

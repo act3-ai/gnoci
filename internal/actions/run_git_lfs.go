@@ -248,7 +248,6 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 
 		pChan := make(chan progress.Progress)
 		done := make(chan struct{})
-
 		go func() {
 			for pUpdate := range pChan {
 				action.writeProgress(ctx, transferReq.Oid, pUpdate.Total, pUpdate.Delta)
