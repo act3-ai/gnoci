@@ -211,7 +211,7 @@ func Test_model_Fetch(t *testing.T) {
 			}()
 
 			m := &model{
-				remote:      tt.remote,
+				ref:         tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -221,7 +221,7 @@ func Test_model_Fetch(t *testing.T) {
 				newPacks:    nil,
 			}
 
-			err = m.Fetch(t.Context())
+			_, err = m.Fetch(t.Context())
 			tt.wantFn(t, m, err)
 
 			err = fstore.Close()
@@ -330,7 +330,7 @@ func Test_model_FetchOrDefault(t *testing.T) {
 			}()
 
 			m := &model{
-				remote:      tt.remote,
+				ref:         tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -340,7 +340,7 @@ func Test_model_FetchOrDefault(t *testing.T) {
 				newPacks:    nil,
 			}
 
-			err = m.FetchOrDefault(t.Context())
+			_, err = m.FetchOrDefault(t.Context())
 			tt.wantFn(t, m, err)
 
 			err = fstore.Close()
@@ -402,7 +402,7 @@ func Test_model_FetchLayer(t *testing.T) {
 			}()
 
 			m := &model{
-				remote:      tt.remote,
+				ref:         tt.remote,
 				gt:          gt,
 				fstore:      fstore,
 				fetched:     tt.fields.fetched,
@@ -413,7 +413,7 @@ func Test_model_FetchLayer(t *testing.T) {
 			}
 
 			// fetching metadata is a prerequisite to fetching layers
-			err = m.Fetch(t.Context())
+			_, err = m.Fetch(t.Context())
 			assert.NoError(t, err)
 
 			rc, err := m.FetchLayer(t.Context(), manifest.Layers[0].Digest)
@@ -570,7 +570,7 @@ func Test_model_Push(t *testing.T) {
 			gt := memory.New()
 
 			m := &model{
-				remote: testRemote,
+				ref:    testRemote,
 				gt:     gt,
 				fstore: fstore,
 				man: ocispec.Manifest{
@@ -581,7 +581,7 @@ func Test_model_Push(t *testing.T) {
 				newPacks:    tt.newPacks,
 			}
 
-			manDesc, err := m.Push(t.Context(), true)
+			manDesc, err := m.Push(t.Context(), UpdateLFSReferrer(m))
 
 			tt.wantFn(t, m, manDesc, gt, err)
 		})

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
@@ -140,7 +141,8 @@ func (action *GitLFS) Run(ctx context.Context) error {
 
 	action.remote = model.NewLFSModeler(remote, fstore, action.gt)
 
-	if err := action.remote.FetchOrDefault(ctx); err != nil {
+	subject, err := action.remote.FetchOrDefault(ctx)
+	if err != nil {
 		return fmt.Errorf("fetching base git OCI metadata: %w", err)
 	}
 
@@ -154,7 +156,7 @@ func (action *GitLFS) Run(ctx context.Context) error {
 	case lfs.DownloadOperation:
 		return action.runDownload(ctx)
 	case lfs.UploadOperation:
-		return action.runUpload(ctx)
+		return action.runUpload(ctx, subject)
 	default:
 		// theoretically impossible
 		return fmt.Errorf("%w: %s", lfs.ErrInvalidOperation, initReq.Operation)
@@ -227,7 +229,7 @@ func (action *GitLFS) runDownload(ctx context.Context) error {
 	return nil
 }
 
-func (action *GitLFS) runUpload(ctx context.Context) error {
+func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor) error {
 	slog.DebugContext(ctx, "handling upload requests")
 	// TODO: by their protocol spec, they block until the transfer is complete
 	// this is far less than ideal for us. Unfortunately, we may not be able
@@ -286,7 +288,7 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 		action.writeTransferResponse(ctx, transferReq.Oid, "", nil)
 	}
 
-	_, err := action.remote.PushLFSManifest(ctx)
+	_, err := action.remote.PushLFSManifest(ctx, subject)
 	if err != nil {
 		return fmt.Errorf("pushing LFS to OCI: %w", err)
 	}

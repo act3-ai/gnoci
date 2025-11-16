@@ -31,7 +31,7 @@ type LFSModeler interface {
 	FetchLFS(ctx context.Context) error
 	FetchLFSOrDefault(ctx context.Context) error
 	// PushLFSManifest upload the git-lfs OCI data model in it's current state.
-	PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error)
+	PushLFSManifest(ctx context.Context, subject ocispec.Descriptor) (ocispec.Descriptor, error)
 	// PushLFSFile adds a git-lfs file as a layer to the git-lfs OCI data model
 	// and pushes it to the remote.
 	PushLFSFile(ctx context.Context, path string, opts *PushLFSOptions) (ocispec.Descriptor, error)
@@ -40,9 +40,9 @@ type LFSModeler interface {
 }
 
 // NewLFSModeler initializes a new git-lfs modeler.
-func NewLFSModeler(remote registry.Reference, fstore *file.Store, gt oras.GraphTarget) LFSModeler {
+func NewLFSModeler(ref registry.Reference, fstore *file.Store, gt oras.GraphTarget) LFSModeler {
 	return &model{
-		remote: remote,
+		ref:    ref,
 		gt:     gt,
 		fstore: fstore,
 	}
@@ -102,10 +102,10 @@ func (m *model) FetchLFSOrDefault(ctx context.Context) error {
 	}
 }
 
-func (m *model) PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error) {
+func (m *model) PushLFSManifest(ctx context.Context, subject ocispec.Descriptor) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "pushing LFS data model")
 
-	if m.lfsManDesc.Digest != "" {
+	if subject.Digest != "" {
 		// TODO: improve error handling
 		// TODO: We don't care it's this struct, only that we have access to Delete
 		r, ok := m.gt.(*remote.Repository)
@@ -119,9 +119,9 @@ func (m *model) PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error)
 		}
 	}
 
-	slog.DebugContext(ctx, "pushing LFS manifest", slog.String("subjectDigest", m.manDesc.Digest.String()))
+	slog.DebugContext(ctx, "pushing LFS manifest", slog.String("subjectDigest", subject.Digest.String()))
 	manOpts := oras.PackManifestOptions{
-		Subject:             &m.manDesc,
+		Subject:             &subject,
 		Layers:              m.lfsMan.Layers,
 		ConfigDescriptor:    nil,                                                                  // oras handles for us
 		ManifestAnnotations: map[string]string{ocispec.AnnotationCreated: "1970-01-01T00:00:00Z"}, // POSIX epoch

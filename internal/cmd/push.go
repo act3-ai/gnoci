@@ -57,7 +57,6 @@ func HandlePush(ctx context.Context, local *git.Repository, localDir string, rem
 	if err != nil {
 		return fmt.Errorf("resolving absolute path: %w", err)
 	}
-	// idxPath := path.Join(action.gitDir, "objects", "pack", fmt.Sprintf("pack-%s.idx", packHash.String()))
 
 	_, err = remote.AddPack(ctx, packPath, refsInNewPack...)
 	switch {
@@ -68,12 +67,13 @@ func HandlePush(ctx context.Context, local *git.Repository, localDir string, rem
 		return fmt.Errorf("adding packfile to OCI data model: %w", err)
 	}
 
-	// TODO: we're silently ignoring this error
-	if err != nil && !errors.Is(err, model.ErrUnsupportedReferenceType) {
-		return fmt.Errorf("adding packfile to OCI data model: %w", err)
+	var referrerUpdates []model.ReferrerUpdater
+	lfsModeler, ok := remote.(model.LFSModeler)
+	if ok {
+		referrerUpdates = append(referrerUpdates, model.UpdateLFSReferrer(lfsModeler))
 	}
 
-	desc, err := remote.Push(ctx, true)
+	desc, err := remote.Push(ctx, referrerUpdates...)
 	if err != nil {
 		return fmt.Errorf("pushing to remote: %w", err)
 	}

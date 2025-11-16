@@ -159,7 +159,8 @@ func (action *Git) handleList(ctx context.Context, gc cmd.Git) error {
 		}
 	}
 
-	if err := action.remote.FetchOrDefault(ctx); err != nil {
+	_, err = action.remote.FetchOrDefault(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -183,7 +184,8 @@ func (action *Git) handlePush(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := action.remote.FetchOrDefault(ctx); err != nil {
+	_, err = action.remote.FetchOrDefault(ctx)
+	if err != nil {
 		return err
 	}
 
