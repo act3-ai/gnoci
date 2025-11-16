@@ -15,7 +15,9 @@ import (
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/errdef"
 	"oras.land/oras-go/v2/registry"
+	"oras.land/oras-go/v2/registry/remote"
 
 	"github.com/act3-ai/gnoci/internal/progress"
 	"github.com/act3-ai/gnoci/pkg/oci"
@@ -51,19 +53,12 @@ var ErrLFSManifestNotFound = fmt.Errorf("LFS manifest not found")
 
 func (m *model) FetchLFS(ctx context.Context) error {
 	slog.DebugContext(ctx, "resolving git manifest referrers", slog.String("subjectDigest", m.manDesc.Digest.String()))
-	referrers, err := registry.Referrers(ctx, m.gt, m.manDesc, "")
-	slog.DebugContext(ctx, "found git manifest referrers", slog.String("referrers", fmt.Sprintf("%v", referrers)))
 
-	// we expect one LFS manifest referrer
-	switch {
-	case len(referrers) < 1:
-		return ErrLFSManifestNotFound
-	case len(referrers) > 1:
-		return fmt.Errorf("expected 1 LFS referrer, got %d", len(referrers)) // should never hit
-	case err != nil:
-		return fmt.Errorf("resolving commit manifest predecessors: %w", err)
+	var err error
+	m.lfsManDesc, err = m.referrer(ctx)
+	if err != nil {
+		return fmt.Errorf("resolving LFS manifest: %w", err)
 	}
-	m.lfsManDesc = referrers[0]
 
 	manRaw, err := content.FetchAll(ctx, m.gt, m.lfsManDesc)
 	if err != nil {
@@ -109,31 +104,19 @@ func (m *model) FetchLFSOrDefault(ctx context.Context) error {
 func (m *model) PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "pushing LFS data model")
 
-	// if deleteOld {
-	// 	// TODO: improve error handling
-	// 	r, ok := m.gt.(*remote.Repository)
-	// 	if !ok {
-	// 		return ocispec.Descriptor{}, fmt.Errorf("graph target is not a remote repository")
-	// 	}
+	if m.lfsManDesc.Digest != "" {
+		// TODO: improve error handling
+		// TODO: We don't care it's this struct, only that we have access to Delete
+		r, ok := m.gt.(*remote.Repository)
+		if !ok {
+			return ocispec.Descriptor{}, fmt.Errorf("graph target is not a remote repository")
+		}
 
-	// 	// remove old referrer, in case this is an LFS only push
-	// 	if err := r.Delete(ctx, m.lfsManDesc); err != nil && !errors.Is(err, errdef.ErrNotFound) {
-	// 		return ocispec.Descriptor{}, fmt.Errorf("deleting old LFS referrer manifest: %w", err)
-	// 	}
-	// }
-
-	// if m.manDesc.Digest == "" {
-	// 	slog.DebugContext(ctx, "pushing temporary git manifest")
-	// 	// first push, we'll push a temporary unique manifest
-	// 	// TODO: is there a more reliable way to generate a unique manifest?
-	// 	m.cfg.Heads[tempGitManifest] = oci.ReferenceInfo{Commit: time.Now().String()}
-
-	// 	var err error
-	// 	m.manDesc, err = m.Push(ctx)
-	// 	if err != nil {
-	// 		return ocispec.Descriptor{}, fmt.Errorf("pushing temporary git manifest: %w", err)
-	// 	}
-	// }
+		// remove old referrer
+		if err := r.Delete(ctx, m.lfsManDesc); err != nil && !errors.Is(err, errdef.ErrNotFound) {
+			return ocispec.Descriptor{}, fmt.Errorf("deleting old LFS referrer manifest: %w", err)
+		}
+	}
 
 	slog.DebugContext(ctx, "pushing LFS manifest", slog.String("subjectDigest", m.manDesc.Digest.String()))
 	manOpts := oras.PackManifestOptions{
@@ -207,6 +190,24 @@ func (m *model) PushLFSFile(ctx context.Context, path string, opts *PushLFSOptio
 
 	m.lfsMan.Layers = append(m.lfsMan.Layers, newDesc)
 	return newDesc, nil
+}
+
+// referrer finds an LFS manifest referrer, if one exists. Throws [ErrLFSManifestNotFound]
+// if no referrer LFS manifest exists.
+func (m *model) referrer(ctx context.Context) (ocispec.Descriptor, error) {
+	referrers, err := registry.Referrers(ctx, m.gt, m.manDesc, "") // TODO: filter me, in case other referrers exist, e.g. a signed image
+	slog.DebugContext(ctx, "found git manifest referrers", slog.String("referrers", fmt.Sprintf("%v", referrers)))
+
+	// we expect one LFS manifest referrer
+	switch {
+	case len(referrers) < 1:
+		return ocispec.Descriptor{}, ErrLFSManifestNotFound
+	case len(referrers) > 1:
+		return ocispec.Descriptor{}, fmt.Errorf("expected 1 LFS referrer, got %d", len(referrers)) // should never hit
+	case err != nil:
+		return ocispec.Descriptor{}, fmt.Errorf("resolving commit manifest predecessors: %w", err)
+	}
+	return referrers[0], nil
 }
 
 // progressOrDefault returns a [progress.Ticker] if ProgressOptions have it enabled.
