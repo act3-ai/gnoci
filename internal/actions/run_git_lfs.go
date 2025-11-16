@@ -146,7 +146,8 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("fetching base git OCI metadata: %w", err)
 	}
 
-	if err := action.remote.FetchLFSOrDefault(ctx); err != nil {
+	_, err = action.remote.FetchLFSOrDefault(ctx)
+	if err != nil {
 		return err
 	}
 

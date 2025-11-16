@@ -200,7 +200,7 @@ type ReferrerUpdater func(ctx context.Context, subject ocispec.Descriptor) error
 func UpdateLFSReferrer(m LFSModeler) ReferrerUpdater {
 	return func(ctx context.Context, subject ocispec.Descriptor) error {
 		// update LFS if it exists
-		err := m.FetchLFS(ctx) // fetch LFS from old git descriptor
+		lfsManDesc, err := m.FetchLFS(ctx) // fetch LFS from old git descriptor
 		switch {
 		case errors.Is(err, ErrLFSManifestNotFound):
 			slog.DebugContext(ctx, "LFS manifest not found")
@@ -212,6 +212,7 @@ func UpdateLFSReferrer(m LFSModeler) ReferrerUpdater {
 				return fmt.Errorf("pushing LFS manifest: %w", err)
 			}
 		}
+		slog.DebugContext(ctx, "successfully updated LFS referrer subject", slog.String("subjectDigest", subject.Digest.String()), slog.String("referrerDigest", lfsManDesc.Digest.String()))
 		return nil
 	}
 }

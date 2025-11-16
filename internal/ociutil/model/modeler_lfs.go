@@ -28,8 +28,8 @@ type LFSModeler interface {
 	Modeler
 
 	// FetchLFS pulls git-lfs OCI metadata from a remote. It does not pull layers.
-	FetchLFS(ctx context.Context) error
-	FetchLFSOrDefault(ctx context.Context) error
+	FetchLFS(ctx context.Context) (ocispec.Descriptor, error)
+	FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error)
 	// PushLFSManifest upload the git-lfs OCI data model in it's current state.
 	PushLFSManifest(ctx context.Context, subject ocispec.Descriptor) (ocispec.Descriptor, error)
 	// PushLFSFile adds a git-lfs file as a layer to the git-lfs OCI data model
@@ -51,25 +51,25 @@ func NewLFSModeler(ref registry.Reference, fstore *file.Store, gt oras.GraphTarg
 // ErrLFSManifestNotFound indicates an LFS manifest was not found.
 var ErrLFSManifestNotFound = fmt.Errorf("LFS manifest not found")
 
-func (m *model) FetchLFS(ctx context.Context) error {
+func (m *model) FetchLFS(ctx context.Context) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "resolving git manifest referrers", slog.String("subjectDigest", m.manDesc.Digest.String()))
 
 	var err error
 	m.lfsManDesc, err = m.referrer(ctx)
 	if err != nil {
-		return fmt.Errorf("resolving LFS manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("resolving LFS manifest: %w", err)
 	}
 
 	manRaw, err := content.FetchAll(ctx, m.gt, m.lfsManDesc)
 	if err != nil {
-		return fmt.Errorf("fetching LFS manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("fetching LFS manifest: %w", err)
 	}
 
 	if err := json.Unmarshal(manRaw, &m.lfsMan); err != nil {
-		return fmt.Errorf("decoding LFS manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("decoding LFS manifest: %w", err)
 	}
 
-	return nil
+	return m.lfsManDesc, nil
 }
 
 func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
@@ -87,18 +87,18 @@ func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadC
 	return nil, fmt.Errorf("%w: %s", errLayerNotInManifest, dgst.String())
 }
 
-func (m *model) FetchLFSOrDefault(ctx context.Context) error {
+func (m *model) FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
-	err := m.FetchLFS(ctx)
+	manDesc, err := m.FetchLFS(ctx)
 	switch {
 	case errors.Is(err, ErrLFSManifestNotFound):
 		slog.InfoContext(ctx, "remote does not exist, initializing default lfs manifest")
 		m.lfsMan = ocispec.Manifest{}
-		return nil
+		return ocispec.Descriptor{}, nil
 	case err != nil:
-		return fmt.Errorf("fetching remote metadata: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("fetching remote metadata: %w", err)
 	default:
-		return nil
+		return manDesc, nil
 	}
 }
 
