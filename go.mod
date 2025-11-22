@@ -7,7 +7,7 @@ require (
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/muesli/termenv v0.16.0
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/spf13/cobra v1.9.1
+	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.34.2
@@ -89,7 +89,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0
-	github.com/spf13/pflag v1.0.7 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/net v0.47.0
