@@ -14,8 +14,9 @@ import (
 )
 
 // HandleFetch executes a batch of fetch commands.
-func HandleFetch(ctx context.Context, local *git.Repository, remote model.Modeler, remoteAddress string, cmds []Git, w Writer) error {
-	if err := remote.Fetch(ctx); err != nil {
+func HandleFetch(ctx context.Context, local *git.Repository, remote model.ReadOnlyModeler, cmds []Git, w Writer) error {
+	_, err := remote.Fetch(ctx)
+	if err != nil {
 		return fmt.Errorf("fetching remote metadata: %w", err)
 	}
 

@@ -80,7 +80,7 @@ func (action *Git) Run(ctx context.Context) error {
 		}
 	}()
 
-	action.remote = model.NewModeler(action.address, fstore, gt)
+	action.remote = model.NewModeler(parsedRef, fstore, gt)
 
 	var done bool
 	for !done {
@@ -159,7 +159,8 @@ func (action *Git) handleList(ctx context.Context, gc cmd.Git) error {
 		}
 	}
 
-	if err := action.remote.FetchOrDefault(ctx); err != nil {
+	_, err = action.remote.FetchOrDefault(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -183,11 +184,12 @@ func (action *Git) handlePush(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := action.remote.FetchOrDefault(ctx); err != nil {
+	_, err = action.remote.FetchOrDefault(ctx)
+	if err != nil {
 		return err
 	}
 
-	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.address, fullBatch, action.batcher); err != nil {
+	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, fullBatch, action.batcher); err != nil {
 		return fmt.Errorf("running push commands: %w", err)
 	}
 
@@ -206,7 +208,7 @@ func (action *Git) handleFetch(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := cmd.HandleFetch(ctx, local, action.remote, action.address, fullBatch, action.batcher); err != nil {
+	if err := cmd.HandleFetch(ctx, local, action.remote, fullBatch, action.batcher); err != nil {
 		return fmt.Errorf("running fetch command: %w", err)
 	}
 

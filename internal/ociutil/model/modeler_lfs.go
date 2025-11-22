@@ -23,53 +23,63 @@ import (
 	"github.com/act3-ai/gnoci/pkg/oci"
 )
 
-// LFSModeler extends [Modeler] with LFS support.
-type LFSModeler interface {
-	Modeler
+// ReadOnlyLFSModeler extends [ReadOnlyModeler] to support reading Git LFS
+// OCI data model.
+type ReadOnlyLFSModeler interface {
+	ReadOnlyModeler
 
 	// FetchLFS pulls git-lfs OCI metadata from a remote. It does not pull layers.
-	FetchLFS(ctx context.Context) error
-	FetchLFSOrDefault(ctx context.Context) error
-	// PushLFSManifest upload the git-lfs OCI data model in it's current state.
-	PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error)
-	// PushLFSFile adds a git-lfs file as a layer to the git-lfs OCI data model
-	// and pushes it to the remote.
-	PushLFSFile(ctx context.Context, path string, opts *PushLFSOptions) (ocispec.Descriptor, error)
+	FetchLFS(ctx context.Context) (ocispec.Descriptor, error)
+	// FetchLFSOrDefault extends [LFSModeler.Fetch] to initialize an empty OCI
+	// manifest if the remote does not exist.
+	FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error)
 	// FetchLFSLayer fetches an LFS file from a layer in the git-lfs OCI data model.
 	FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
 }
 
+// LFSModeler extends [Modeler] with LFS support.
+type LFSModeler interface {
+	Modeler
+	ReadOnlyLFSModeler
+
+	// PushLFSManifest upload the git-lfs OCI data model in it's current state.
+	PushLFSManifest(ctx context.Context, subject ocispec.Descriptor) (ocispec.Descriptor, error)
+	// PushLFSFile adds a git-lfs file as a layer to the git-lfs OCI data model
+	// and pushes it to the remote.
+	PushLFSFile(ctx context.Context, path string, opts *PushLFSOptions) (ocispec.Descriptor, error)
+}
+
 // NewLFSModeler initializes a new git-lfs modeler.
-func NewLFSModeler(ociRemote string, fstore *file.Store, gt oras.GraphTarget) LFSModeler {
+func NewLFSModeler(ref registry.Reference, fstore *file.Store, gt oras.GraphTarget) LFSModeler {
 	return &model{
-		ociRemote: ociRemote,
-		gt:        gt,
-		fstore:    fstore,
+		ref:    ref,
+		gt:     gt,
+		fstore: fstore,
 	}
 }
 
 // ErrLFSManifestNotFound indicates an LFS manifest was not found.
 var ErrLFSManifestNotFound = fmt.Errorf("LFS manifest not found")
 
-func (m *model) FetchLFS(ctx context.Context) error {
+func (m *model) FetchLFS(ctx context.Context) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "resolving git manifest referrers", slog.String("subjectDigest", m.manDesc.Digest.String()))
 
 	var err error
 	m.lfsManDesc, err = m.referrer(ctx)
 	if err != nil {
-		return fmt.Errorf("resolving LFS manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("resolving LFS manifest: %w", err)
 	}
 
 	manRaw, err := content.FetchAll(ctx, m.gt, m.lfsManDesc)
 	if err != nil {
-		return fmt.Errorf("fetching LFS manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("fetching LFS manifest: %w", err)
 	}
 
 	if err := json.Unmarshal(manRaw, &m.lfsMan); err != nil {
-		return fmt.Errorf("decoding LFS manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("decoding LFS manifest: %w", err)
 	}
 
-	return nil
+	return m.lfsManDesc, nil
 }
 
 func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
@@ -87,24 +97,25 @@ func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadC
 	return nil, fmt.Errorf("%w: %s", errLayerNotInManifest, dgst.String())
 }
 
-func (m *model) FetchLFSOrDefault(ctx context.Context) error {
-	err := m.FetchLFS(ctx)
+func (m *model) FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error) {
+	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
+	manDesc, err := m.FetchLFS(ctx)
 	switch {
 	case errors.Is(err, ErrLFSManifestNotFound):
 		slog.InfoContext(ctx, "remote does not exist, initializing default lfs manifest")
 		m.lfsMan = ocispec.Manifest{}
-		return nil
+		return ocispec.Descriptor{}, nil
 	case err != nil:
-		return fmt.Errorf("fetching remote metadata: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("fetching remote metadata: %w", err)
 	default:
-		return nil
+		return manDesc, nil
 	}
 }
 
-func (m *model) PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error) {
+func (m *model) PushLFSManifest(ctx context.Context, subject ocispec.Descriptor) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "pushing LFS data model")
 
-	if m.lfsManDesc.Digest != "" {
+	if subject.Digest != "" {
 		// TODO: improve error handling
 		// TODO: We don't care it's this struct, only that we have access to Delete
 		r, ok := m.gt.(*remote.Repository)
@@ -118,9 +129,9 @@ func (m *model) PushLFSManifest(ctx context.Context) (ocispec.Descriptor, error)
 		}
 	}
 
-	slog.DebugContext(ctx, "pushing LFS manifest", slog.String("subjectDigest", m.manDesc.Digest.String()))
+	slog.DebugContext(ctx, "pushing LFS manifest", slog.String("subjectDigest", subject.Digest.String()))
 	manOpts := oras.PackManifestOptions{
-		Subject:             &m.manDesc,
+		Subject:             &subject,
 		Layers:              m.lfsMan.Layers,
 		ConfigDescriptor:    nil,                                                                  // oras handles for us
 		ManifestAnnotations: map[string]string{ocispec.AnnotationCreated: "1970-01-01T00:00:00Z"}, // POSIX epoch

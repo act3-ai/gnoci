@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
@@ -35,10 +36,9 @@ type GitLFS struct {
 	ConfigFiles []string
 
 	// OCI remote
-	gt     oras.GraphTarget
-	remote model.LFSModeler
-	in     *bufio.Scanner
-	out    io.Writer
+	gt  oras.GraphTarget
+	in  *bufio.Scanner
+	out io.Writer
 }
 
 // NewGitLFS creates a new Tool with default values.
@@ -50,6 +50,41 @@ func NewGitLFS(in io.Reader, out io.Writer, version string, cfgFiles []string) *
 		in:          bufio.NewScanner(in),
 		out:         out,
 	}
+}
+
+// resolveAddress trims an OCI URL or resolves a shortname to a URL.
+func resolveAddress(ctx context.Context, remote string, repo *git.Repository) (registry.Reference, error) {
+	var remoteURL string
+	if strings.HasPrefix(remote, "oci://") {
+		slog.DebugContext(ctx, "received full remote URL", slog.String("url", remote))
+		remoteURL = trimProtocol(remote)
+	} else {
+		slog.DebugContext(ctx, "received remote shortname", slog.String("shortname", remote))
+
+		// Look up the remote by name
+		remote, err := repo.Remote(trimProtocol(remote)) // sanity?
+		if err != nil {
+			return registry.Reference{}, fmt.Errorf("resolving remote URL for %s: %w", remote, err)
+		}
+		remoteURLs := remote.Config().URLs
+		if len(remoteURLs) < 1 {
+			return registry.Reference{}, fmt.Errorf("no URLs configured for remote %s", remote)
+		}
+		remoteURL = trimProtocol(remoteURLs[0]) // TODO: do we just push to multiple if more than one URL is provided? How would git-remote-oci handle this?
+		slog.DebugContext(ctx, "resolved remote URL", "url", remoteURL)
+	}
+
+	parsedRef, err := registry.ParseReference(remoteURL)
+	if err != nil {
+		return registry.Reference{}, fmt.Errorf("invalid reference %s: %w", remoteURL, err)
+	}
+
+	return parsedRef, nil
+}
+
+// trimProtocol trims a oci:// protocol prefix.
+func trimProtocol(remote string) string {
+	return strings.TrimPrefix(remote, "oci://")
 }
 
 // Run runs the the primary git-remote-oci action.
@@ -76,23 +111,9 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("opening local repository: %w", err)
 	}
 
-	var remoteURL string
-	if strings.HasPrefix(initReq.Remote, "oci://") {
-		slog.DebugContext(ctx, "received full remote URL", slog.String("url", initReq.Remote))
-		remoteURL = strings.TrimPrefix(initReq.Remote, "oci://")
-	} else {
-		slog.DebugContext(ctx, "received remote shortname", slog.String("shortname", initReq.Remote))
-		// Look up the remote by name
-		remote, err := repo.Remote(strings.TrimPrefix(initReq.Remote, "oci://")) // sanity?
-		if err != nil {
-			return fmt.Errorf("resolving remote URL for %s: %w", initReq.Remote, err)
-		}
-		remoteURLs := remote.Config().URLs
-		if len(remoteURLs) < 1 {
-			return fmt.Errorf("no URLs configured for remote %s", initReq.Remote)
-		}
-		remoteURL = strings.TrimPrefix(remoteURLs[0], "oci://") // TODO: do we just push to multiple if more than one URL is provided? How would git-remote-oci handle this?
-		slog.DebugContext(ctx, "resolved remote URL", "url", remoteURL)
+	ref, err := resolveAddress(ctx, initReq.Remote, repo)
+	if err != nil {
+		return fmt.Errorf("resolving remote URL: %w", err)
 	}
 
 	cfg, err := action.GetConfig(ctx)
@@ -100,14 +121,9 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("getting configuration: %w", err)
 	}
 
-	parsedRef, err := registry.ParseReference(remoteURL)
-	if err != nil {
-		return fmt.Errorf("invalid reference %s: %w", remoteURL, err)
-	}
-
 	var fstorePath string
 	var fstore *file.Store
-	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, parsedRef, repoOptsFromConfig(parsedRef.Host(), cfg))
+	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, ref, repoOptsFromConfig(ref.Host(), cfg))
 	if err != nil {
 		return fmt.Errorf("initializing: %w", err)
 	}
@@ -122,14 +138,15 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		}
 	}()
 
-	action.remote = model.NewLFSModeler(remoteURL, fstore, action.gt)
+	remote := model.NewLFSModeler(ref, fstore, action.gt)
 
-	if err := action.remote.FetchOrDefault(ctx); err != nil {
+	subject, err := remote.FetchOrDefault(ctx)
+	if err != nil {
 		return fmt.Errorf("fetching base git OCI metadata: %w", err)
 	}
 
-	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
-	if err := action.remote.FetchLFSOrDefault(ctx); err != nil {
+	_, err = remote.FetchLFSOrDefault(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -137,16 +154,16 @@ func (action *GitLFS) Run(ctx context.Context) error {
 
 	switch initReq.Operation {
 	case lfs.DownloadOperation:
-		return action.runDownload(ctx)
+		return action.runDownload(ctx, remote)
 	case lfs.UploadOperation:
-		return action.runUpload(ctx)
+		return action.runUpload(ctx, subject, remote)
 	default:
 		// theoretically impossible
 		return fmt.Errorf("%w: %s", lfs.ErrInvalidOperation, initReq.Operation)
 	}
 }
 
-func (action *GitLFS) runDownload(ctx context.Context) error {
+func (action *GitLFS) runDownload(ctx context.Context, remote model.ReadOnlyLFSModeler) error {
 	slog.DebugContext(ctx, "handling download requests")
 
 	tmpDir, err := os.MkdirTemp(os.TempDir(), "git-lfs-remote-oci-pull-*")
@@ -182,7 +199,7 @@ func (action *GitLFS) runDownload(ctx context.Context) error {
 		action.writeProgress(ctx, transferReq.Oid, 1, 1)
 
 		// TODO: convenient that LFS uses sha256, but are other digest methods out there?
-		rc, err := action.remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid))
+		rc, err := remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid))
 		if err != nil {
 			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("fetching LFS file: %w", err))
 			continue
@@ -212,7 +229,7 @@ func (action *GitLFS) runDownload(ctx context.Context) error {
 	return nil
 }
 
-func (action *GitLFS) runUpload(ctx context.Context) error {
+func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor, remote model.LFSModeler) error {
 	slog.DebugContext(ctx, "handling upload requests")
 	// TODO: by their protocol spec, they block until the transfer is complete
 	// this is far less than ideal for us. Unfortunately, we may not be able
@@ -260,7 +277,7 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 				Info: pChan,
 			},
 		}
-		if _, err := action.remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
+		if _, err := remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
 			action.writeTransferResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
 			<-done
 			continue
@@ -271,7 +288,7 @@ func (action *GitLFS) runUpload(ctx context.Context) error {
 		action.writeTransferResponse(ctx, transferReq.Oid, "", nil)
 	}
 
-	_, err := action.remote.PushLFSManifest(ctx)
+	_, err := remote.PushLFSManifest(ctx, subject)
 	if err != nil {
 		return fmt.Errorf("pushing LFS to OCI: %w", err)
 	}

@@ -23,6 +23,7 @@ import (
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/errdef"
+	"oras.land/oras-go/v2/registry"
 )
 
 var (
@@ -37,31 +38,21 @@ var (
 // tempGitManifest is used only on an initial push of an LFS manifest.
 const tempGitManifest = "temp.git.manifest"
 
-// Modeler allows for fetching, updating, and pushing a Git OCI data model to
-// an OCI registry.
-// TODO: Is this interface overloaded?
-type Modeler interface {
+// ReadOnlyModeler supports reading a Git OCI data model.
+type ReadOnlyModeler interface {
+	// Ref provides a convenient way to get the OCI remote reference where the
+	// Git data model is stored.
+	Ref() registry.Reference
 	// Fetch pulls Git OCI metadata from a remote. It does not pull layers.
-	Fetch(ctx context.Context) error
-	// FetchOrDefault extends Fetch to initialize an empty OCI manifest and config
+	Fetch(ctx context.Context) (ocispec.Descriptor, error)
+	// FetchOrDefault extends [ReadOnlyModeler.Fetch] to initialize an empty OCI manifest and config
 	// if the remote ref does not exist.
-	FetchOrDefault(ctx context.Context) error
+	FetchOrDefault(ctx context.Context) (ocispec.Descriptor, error)
 	// FetchLayer fetches a packfile layer from OCI identifies by digest.
 	FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
-	// Push uploads the Git OCI data model in its current state.
-	Push(ctx context.Context, updateSubject bool) (ocispec.Descriptor, error)
-	// AddPack adds a packfile as a layer to the Git OCI data model and updates
-	// the remote references whose objs are included in the packfile.
-	AddPack(ctx context.Context, path string, refs ...*plumbing.Reference) (ocispec.Descriptor, error)
-	// UpdateRef updates a Git reference and the object it points to in the
-	// Git OCI data model. Useful for updating a reference where its object
-	// is within a packfile that already exists in the remote OCI registry.
-	UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error
 	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
 	// the ref does not exist or if not supported (head or tag ref).
 	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, digest.Digest, error)
-	// DeleteRef removes a reference from the remote. The commit remains.
-	DeleteRef(ctx context.Context, refName plumbing.ReferenceName) error
 	// HeadRefs returns the existing head references.
 	HeadRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
 	// TagRefs returns the existing tag references.
@@ -71,12 +62,30 @@ type Modeler interface {
 	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
 }
 
+// Modeler extends [ReadOnlyModeler] with updating and pushing a Git OCI data model to
+// an OCI registry.
+type Modeler interface {
+	ReadOnlyModeler
+
+	// Push uploads the Git OCI data model in its current state.
+	Push(ctx context.Context, referrerUpdates ...ReferrerUpdater) (ocispec.Descriptor, error)
+	// AddPack adds a packfile as a layer to the Git OCI data model and updates
+	// the remote references whose objs are included in the packfile.
+	AddPack(ctx context.Context, path string, refs ...*plumbing.Reference) (ocispec.Descriptor, error)
+	// UpdateRef updates a Git reference and the object it points to in the
+	// Git OCI data model. Useful for updating a reference where its object
+	// is within a packfile that already exists in the remote OCI registry.
+	UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error
+	// DeleteRef removes a reference from the remote. The commit remains.
+	DeleteRef(ctx context.Context, refName plumbing.ReferenceName) error
+}
+
 // NewModeler initializes a new git modeler.
-func NewModeler(ociRemote string, fstore *file.Store, gt oras.GraphTarget) Modeler {
+func NewModeler(ref registry.Reference, fstore *file.Store, gt oras.GraphTarget) Modeler {
 	return &model{
-		ociRemote: ociRemote,
-		gt:        gt,
-		fstore:    fstore,
+		ref:    ref,
+		gt:     gt,
+		fstore: fstore,
 	}
 }
 
@@ -84,9 +93,9 @@ func NewModeler(ociRemote string, fstore *file.Store, gt oras.GraphTarget) Model
 //
 // Note: updates to Git OCI metadata are not concurrency safe.
 type model struct {
-	ociRemote string
-	gt        oras.GraphTarget
-	fstore    *file.Store
+	ref    registry.Reference
+	gt     oras.GraphTarget
+	fstore *file.Store
 
 	// populated on fetch
 	fetched     bool
@@ -100,51 +109,56 @@ type model struct {
 	lfsManDesc ocispec.Descriptor
 }
 
-func (m *model) Fetch(ctx context.Context) error {
+func (m *model) Ref() registry.Reference {
+	return m.ref
+}
+
+func (m *model) Fetch(ctx context.Context) (ocispec.Descriptor, error) {
 	if m.fetched {
 		m.cleanupTempManifest() // HACK
-		return nil
+		return m.manDesc, nil
 	}
 
-	slog.DebugContext(ctx, "resolving manifest descriptor")
+	slog.DebugContext(ctx, "resolving base manifest descriptor")
 	var err error
-	m.manDesc, err = m.gt.Resolve(ctx, m.ociRemote)
+	m.manDesc, err = m.gt.Resolve(ctx, m.ref.String())
 	if err != nil {
-		return fmt.Errorf("resolving manifest descriptor for remote %s: %w", m.ociRemote, err)
+		return ocispec.Descriptor{}, fmt.Errorf("resolving basae manifest descriptor for remote %s: %w", m.ref, err)
 	}
 
-	slog.DebugContext(ctx, "fetching manifest")
+	slog.DebugContext(ctx, "fetching base manifest")
 	manRaw, err := content.FetchAll(ctx, m.gt, m.manDesc)
 	if err != nil {
-		return fmt.Errorf("fetching manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("fetching base manifest: %w", err)
 	}
 
 	if err := json.Unmarshal(manRaw, &m.man); err != nil {
-		return fmt.Errorf("decoding manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("decoding base manifest: %w", err)
 	}
 
 	slog.DebugContext(ctx, "fetching config")
 	cfgRaw, err := content.FetchAll(ctx, m.gt, m.man.Config)
 	if err != nil {
-		return fmt.Errorf("fetching config: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("fetching config: %w", err)
 	}
 
 	if err := json.Unmarshal(cfgRaw, &m.cfg); err != nil {
-		return fmt.Errorf("decoding config: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("decoding config: %w", err)
 	}
 
 	m.sortRefsByLayer()
 	m.fetched = true
 
-	return nil
+	return m.manDesc, nil
 }
 
 func (m *model) cleanupTempManifest() {
 	delete(m.cfg.Heads, tempGitManifest)
 }
 
-func (m *model) FetchOrDefault(ctx context.Context) error {
-	err := m.Fetch(ctx)
+func (m *model) FetchOrDefault(ctx context.Context) (ocispec.Descriptor, error) {
+	slog.DebugContext(ctx, "fetching base manifest or defaulting")
+	manDesc, err := m.Fetch(ctx)
 	switch {
 	case errors.Is(err, errdef.ErrNotFound):
 		slog.InfoContext(ctx, "remote does not exist, initializing default git manifest and config")
@@ -162,21 +176,21 @@ func (m *model) FetchOrDefault(ctx context.Context) error {
 		// HACK: temporarily push this so it's available to git-lfs-remote-oci
 		m.cfg.Heads[tempGitManifest] = oci.ReferenceInfo{Commit: time.Now().String()}
 		var err error
-		m.manDesc, err = m.Push(ctx, false)
+		m.manDesc, err = m.Push(ctx)
 		if err != nil {
-			return fmt.Errorf("pushing temporary git manifest: %w", err)
+			return ocispec.Descriptor{}, fmt.Errorf("pushing temporary git manifest: %w", err)
 		}
 		m.fetched = true
-		return nil
+		return manDesc, nil
 	case err != nil:
-		return fmt.Errorf("fetching remote metadata: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("fetching remote metadata: %w", err)
 	default:
-		return nil
+		return manDesc, nil
 	}
 }
 
 func (m *model) FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
-	slog.DebugContext(ctx, "fetching packfile", slog.String("digest", dgst.String()))
+	slog.DebugContext(ctx, "fetching packfile OCI layer", slog.String("digest", dgst.String()))
 	// TODO: reverse iter? it is more likely we'll want to fetch newer layers
 	for _, desc := range m.man.Layers {
 		if desc.Digest == dgst {
@@ -190,7 +204,7 @@ func (m *model) FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadClos
 	return nil, fmt.Errorf("%w: %s", errLayerNotInManifest, dgst.String())
 }
 
-func (m *model) Push(ctx context.Context, updateSubject bool) (ocispec.Descriptor, error) {
+func (m *model) Push(ctx context.Context, referrerUpdates ...ReferrerUpdater) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "pushing git data model")
 	// TODO: Perhaps we could make this more efficient, ONLY in the case where
 	// multiple packfiles are added, if we make a custom oras.CopyGraphOptions to
@@ -242,28 +256,22 @@ func (m *model) Push(ctx context.Context, updateSubject bool) (ocispec.Descripto
 		return ocispec.Descriptor{}, fmt.Errorf("packing and pushing base manifest: %w", err)
 	}
 
-	if updateSubject {
-		// update LFS if it exists
-		err = m.FetchLFS(ctx) // fetch LFS from old git descriptor
-		switch {
-		case errors.Is(err, ErrLFSManifestNotFound):
-			slog.DebugContext(ctx, "LFS manifest not found")
-		case err != nil:
-			slog.ErrorContext(ctx, "failed to fetch LFS manifest", slog.String("error", err.Error()))
-		default:
-			m.manDesc = manDesc // update subject to new git descriptor
-			_, err = m.PushLFSManifest(ctx)
-			if err != nil {
-				return ocispec.Descriptor{}, fmt.Errorf("pushing LFS manifest: %w", err)
-			}
+	var updateErrs []error
+	for _, update := range referrerUpdates {
+		err = update(ctx, manDesc)
+		if err != nil {
+			updateErrs = append(updateErrs, err)
 		}
 	}
+	if len(updateErrs) > 0 {
+		return manDesc, fmt.Errorf("referrer updates failed: %w", errors.Join(updateErrs...))
+	}
 
-	if err := m.gt.Tag(ctx, manDesc, m.ociRemote); err != nil {
+	if err := m.gt.Tag(ctx, manDesc, m.ref.String()); err != nil {
 		return manDesc, fmt.Errorf("tagging base manifest: %w", err)
 	}
 
-	slog.DebugContext(ctx, "tagged git manifest", slog.String("digest", manDesc.Digest.String()), slog.String("reference", m.ociRemote))
+	slog.DebugContext(ctx, "tagged git manifest", slog.String("digest", manDesc.Digest.String()), slog.String("reference", m.ref.String()))
 
 	return manDesc, nil
 }
