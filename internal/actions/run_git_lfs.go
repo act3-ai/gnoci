@@ -36,10 +36,9 @@ type GitLFS struct {
 	ConfigFiles []string
 
 	// OCI remote
-	gt     oras.GraphTarget
-	remote model.LFSModeler
-	in     *bufio.Scanner
-	out    io.Writer
+	gt  oras.GraphTarget
+	in  *bufio.Scanner
+	out io.Writer
 }
 
 // NewGitLFS creates a new Tool with default values.
@@ -112,7 +111,7 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		return fmt.Errorf("opening local repository: %w", err)
 	}
 
-	remote, err := resolveAddress(ctx, initReq.Remote, repo)
+	ref, err := resolveAddress(ctx, initReq.Remote, repo)
 	if err != nil {
 		return fmt.Errorf("resolving remote URL: %w", err)
 	}
@@ -124,7 +123,7 @@ func (action *GitLFS) Run(ctx context.Context) error {
 
 	var fstorePath string
 	var fstore *file.Store
-	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, remote, repoOptsFromConfig(remote.Host(), cfg))
+	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, ref, repoOptsFromConfig(ref.Host(), cfg))
 	if err != nil {
 		return fmt.Errorf("initializing: %w", err)
 	}
@@ -139,14 +138,14 @@ func (action *GitLFS) Run(ctx context.Context) error {
 		}
 	}()
 
-	action.remote = model.NewLFSModeler(remote, fstore, action.gt)
+	remote := model.NewLFSModeler(ref, fstore, action.gt)
 
-	subject, err := action.remote.FetchOrDefault(ctx)
+	subject, err := remote.FetchOrDefault(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching base git OCI metadata: %w", err)
 	}
 
-	_, err = action.remote.FetchLFSOrDefault(ctx)
+	_, err = remote.FetchLFSOrDefault(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,16 +154,16 @@ func (action *GitLFS) Run(ctx context.Context) error {
 
 	switch initReq.Operation {
 	case lfs.DownloadOperation:
-		return action.runDownload(ctx)
+		return action.runDownload(ctx, remote)
 	case lfs.UploadOperation:
-		return action.runUpload(ctx, subject)
+		return action.runUpload(ctx, subject, remote)
 	default:
 		// theoretically impossible
 		return fmt.Errorf("%w: %s", lfs.ErrInvalidOperation, initReq.Operation)
 	}
 }
 
-func (action *GitLFS) runDownload(ctx context.Context) error {
+func (action *GitLFS) runDownload(ctx context.Context, remote model.ReadOnlyLFSModeler) error {
 	slog.DebugContext(ctx, "handling download requests")
 
 	tmpDir, err := os.MkdirTemp(os.TempDir(), "git-lfs-remote-oci-pull-*")
@@ -200,7 +199,7 @@ func (action *GitLFS) runDownload(ctx context.Context) error {
 		action.writeProgress(ctx, transferReq.Oid, 1, 1)
 
 		// TODO: convenient that LFS uses sha256, but are other digest methods out there?
-		rc, err := action.remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid))
+		rc, err := remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid))
 		if err != nil {
 			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("fetching LFS file: %w", err))
 			continue
@@ -230,7 +229,7 @@ func (action *GitLFS) runDownload(ctx context.Context) error {
 	return nil
 }
 
-func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor) error {
+func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor, remote model.LFSModeler) error {
 	slog.DebugContext(ctx, "handling upload requests")
 	// TODO: by their protocol spec, they block until the transfer is complete
 	// this is far less than ideal for us. Unfortunately, we may not be able
@@ -278,7 +277,7 @@ func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor)
 				Info: pChan,
 			},
 		}
-		if _, err := action.remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
+		if _, err := remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
 			action.writeTransferResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
 			<-done
 			continue
@@ -289,7 +288,7 @@ func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor)
 		action.writeTransferResponse(ctx, transferReq.Oid, "", nil)
 	}
 
-	_, err := action.remote.PushLFSManifest(ctx, subject)
+	_, err := remote.PushLFSManifest(ctx, subject)
 	if err != nil {
 		return fmt.Errorf("pushing LFS to OCI: %w", err)
 	}

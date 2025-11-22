@@ -38,17 +38,35 @@ var (
 // tempGitManifest is used only on an initial push of an LFS manifest.
 const tempGitManifest = "temp.git.manifest"
 
-// Modeler allows for fetching, updating, and pushing a Git OCI data model to
-// an OCI registry.
-// TODO: Is this interface overloaded?
-type Modeler interface {
+// ReadOnlyModeler supports reading a Git OCI data model.
+type ReadOnlyModeler interface {
+	// Ref provides a convenient way to get the OCI remote reference where the
+	// Git data model is stored.
+	Ref() registry.Reference
 	// Fetch pulls Git OCI metadata from a remote. It does not pull layers.
 	Fetch(ctx context.Context) (ocispec.Descriptor, error)
-	// FetchOrDefault extends Fetch to initialize an empty OCI manifest and config
+	// FetchOrDefault extends [ReadOnlyModeler.Fetch] to initialize an empty OCI manifest and config
 	// if the remote ref does not exist.
 	FetchOrDefault(ctx context.Context) (ocispec.Descriptor, error)
 	// FetchLayer fetches a packfile layer from OCI identifies by digest.
 	FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
+	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
+	// the ref does not exist or if not supported (head or tag ref).
+	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, digest.Digest, error)
+	// HeadRefs returns the existing head references.
+	HeadRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
+	// TagRefs returns the existing tag references.
+	TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
+	// CommitExists uses a local repository to resolve the best known OCI layer containing the commit.
+	// a nil error with an empty layer indicates a commit does not exist.
+	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
+}
+
+// Modeler extends [ReadOnlyModeler] with updating and pushing a Git OCI data model to
+// an OCI registry.
+type Modeler interface {
+	ReadOnlyModeler
+
 	// Push uploads the Git OCI data model in its current state.
 	Push(ctx context.Context, referrerUpdates ...ReferrerUpdater) (ocispec.Descriptor, error)
 	// AddPack adds a packfile as a layer to the Git OCI data model and updates
@@ -58,18 +76,8 @@ type Modeler interface {
 	// Git OCI data model. Useful for updating a reference where its object
 	// is within a packfile that already exists in the remote OCI registry.
 	UpdateRef(ctx context.Context, ref *plumbing.Reference, ociLayer digest.Digest) error
-	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
-	// the ref does not exist or if not supported (head or tag ref).
-	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, digest.Digest, error)
 	// DeleteRef removes a reference from the remote. The commit remains.
 	DeleteRef(ctx context.Context, refName plumbing.ReferenceName) error
-	// HeadRefs returns the existing head references.
-	HeadRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
-	// TagRefs returns the existing tag references.
-	TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
-	// CommitExists uses a local repository to resolve the best known OCI layer containing the commit.
-	// a nil error with an empty layer indicates a commit does not exist.
-	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
 }
 
 // NewModeler initializes a new git modeler.
@@ -99,6 +107,10 @@ type model struct {
 
 	lfsMan     ocispec.Manifest
 	lfsManDesc ocispec.Descriptor
+}
+
+func (m *model) Ref() registry.Reference {
+	return m.ref
 }
 
 func (m *model) Fetch(ctx context.Context) (ocispec.Descriptor, error) {

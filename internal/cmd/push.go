@@ -21,7 +21,7 @@ import (
 )
 
 // HandlePush executes a batch of push commands.
-func HandlePush(ctx context.Context, local *git.Repository, localDir string, remote model.Modeler, remoteAddress string, cmds []Git, bw BatchWriter) error {
+func HandlePush(ctx context.Context, local *git.Repository, localDir string, remote model.Modeler, cmds []Git, bw BatchWriter) error {
 	// compare local refs to remote
 	newCommits, refsInNewPack, results := compareRefs(ctx, local, remote, cmds)
 
@@ -77,7 +77,7 @@ func HandlePush(ctx context.Context, local *git.Repository, localDir string, rem
 	if err != nil {
 		return fmt.Errorf("pushing to remote: %w", err)
 	}
-	slog.InfoContext(ctx, "successfully pushed to remote", "address", remoteAddress, "digest", desc.Digest, "size", desc.Size)
+	slog.InfoContext(ctx, "successfully pushed to remote", "address", remote.Ref(), "digest", desc.Digest, "size", desc.Size)
 
 	if err := bw.WriteBatch(ctx, results...); err != nil {
 		return fmt.Errorf("writing push results to git: %w", err)

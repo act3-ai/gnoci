@@ -23,20 +23,30 @@ import (
 	"github.com/act3-ai/gnoci/pkg/oci"
 )
 
-// LFSModeler extends [Modeler] with LFS support.
-type LFSModeler interface {
-	Modeler
+// ReadOnlyLFSModeler extends [ReadOnlyModeler] to support reading Git LFS
+// OCI data model.
+type ReadOnlyLFSModeler interface {
+	ReadOnlyModeler
 
 	// FetchLFS pulls git-lfs OCI metadata from a remote. It does not pull layers.
 	FetchLFS(ctx context.Context) (ocispec.Descriptor, error)
+	// FetchLFSOrDefault extends [LFSModeler.Fetch] to initialize an empty OCI
+	// manifest if the remote does not exist.
 	FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error)
+	// FetchLFSLayer fetches an LFS file from a layer in the git-lfs OCI data model.
+	FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
+}
+
+// LFSModeler extends [Modeler] with LFS support.
+type LFSModeler interface {
+	Modeler
+	ReadOnlyLFSModeler
+
 	// PushLFSManifest upload the git-lfs OCI data model in it's current state.
 	PushLFSManifest(ctx context.Context, subject ocispec.Descriptor) (ocispec.Descriptor, error)
 	// PushLFSFile adds a git-lfs file as a layer to the git-lfs OCI data model
 	// and pushes it to the remote.
 	PushLFSFile(ctx context.Context, path string, opts *PushLFSOptions) (ocispec.Descriptor, error)
-	// FetchLFSLayer fetches an LFS file from a layer in the git-lfs OCI data model.
-	FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
 }
 
 // NewLFSModeler initializes a new git-lfs modeler.

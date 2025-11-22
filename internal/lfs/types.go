@@ -1,3 +1,6 @@
+// Package lfs defines types used in the Git LFS custom transfer protocol.
+//
+// Protocol: https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md
 package lfs
 
 import (
@@ -5,12 +8,11 @@ import (
 	"fmt"
 )
 
-// See protocol docs: https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md.
-// Also their end of the protocol:  https://github.com/git-lfs/git-lfs/blob/a06ae195185ebc0fb00f3e4eef5a138d17338773/tq/custom.go#L78
-
 var (
 	// ErrInvalidOperation indicates an operation is not supported or is unexpected.
 	ErrInvalidOperation = errors.New("invalid operation")
+	// ErrNoRemote indicates missing remote URL information.
+	ErrNoRemote = errors.New("no remote specified")
 )
 
 // Event describes the type of request made by git-lfs.
@@ -51,6 +53,7 @@ type InitRequest struct {
 	Operation Operation `json:"operation"` // either [DownloadOperation] or [UploadOperation]
 	Remote    string    `json:"remote"`    // shortname or full URL
 	// TODO: We should set default concurrency values if these are not set.
+	// TODO: some of these we don't support at this time?
 	Concurrent          bool `json:"concurrent"`
 	ConcurrentTransfers int  `json:"concurrenttransfers"`
 }
@@ -69,7 +72,7 @@ func (r *InitRequest) Validate() error {
 	}
 
 	if r.Remote == "" {
-		errs = append(errs, errors.New("no remote specified"))
+		errs = append(errs, ErrNoRemote)
 	}
 
 	if len(errs) > 0 {
@@ -79,13 +82,10 @@ func (r *InitRequest) Validate() error {
 	return errors.Join(errs...)
 }
 
-// InitResponse is the response sent to a [InitRequest].
+// InitResponse is the response to an [InitRequest].
 type InitResponse struct {
 	Error ErrCodeMessage `json:"error"`
 }
-
-// TODO: after init request has been processed, respond with `{ }`
-// Or on error : { "error": { "code": 32, "message": "Some init failure message" } }
 
 // TransferRequest is sent by git-lfs for 0..N transfers.
 //
@@ -99,7 +99,7 @@ type TransferRequest struct {
 	Oid   string `json:"oid"`
 	Size  int64  `json:"size"`
 	Path  string `json:"path,omitempty"` // only included with [UploadEvent]
-	// TODO: we're likely doing a "standalone transfer agent", which is always null if the user sets up their settings properly
+	// TODO: we implement a "standalone transfer agent", which is always null if the user sets up their settings properly
 	// Action *Action `json:"action"`
 }
 
@@ -140,7 +140,7 @@ type ProgressResponse struct {
 	BytesSinceLast int    `json:"bytesSinceLast"`
 }
 
-// FinishRequest is send by git-lfs to indicate no other requests will be made.
+// FinishRequest is received from git-lfs, indicating no other requests will be made.
 type FinishRequest struct {
 	Event Event `json:"event"` // always [TerminateEvent]
 }
