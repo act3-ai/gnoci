@@ -10,7 +10,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/act3-ai/gnoci/internal/lfs"
+	"github.com/act3-ai/gnoci/pkg/protocol/lfs"
 )
 
 // Communicator provides handling of git-lfs transfer protocol
