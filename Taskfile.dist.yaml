@@ -24,14 +24,15 @@ tasks:
     cmds:
       - dagger -c 'test | coverage-tree-map -- $(test | coverage) | export -- coverage-treemap.svg'
 
+# TODO: put anybadge into dagger and create single dagger call, exporting a directory
   coverage-docs:
     desc: "Generate code coverage badge and treemap for README.md docs."
     cmds:
       - |
-        dagger -c 'test | coverage | export -- docs/figures/badges/coverage.out'
-        dagger -c 'test | coverage-tree-map -- docs/figures/badges/coverage.out | export -- docs/figures/badges/coverage-treemap.svg'
+        dagger -c 'test | coverage | export -- docs/figures/badges/coverage.filtered'
+        dagger -c 'test | coverage-tree-map -- docs/figures/badges/coverage.filtered | export -- docs/figures/badges/coverage-treemap.svg'
 
-        COVERAGE=$(go tool cover -func=docs/figures/badges/coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        COVERAGE=$(go tool cover -func=docs/figures/badges/coverage.filtered | grep total | awk '{print $3}' | sed 's/%//')
 
         rm docs/figures/badges/coverage.svg
         anybadge --label=coverage --value=$COVERAGE \

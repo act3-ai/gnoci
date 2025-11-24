@@ -49,8 +49,12 @@ const (
 func (t *Test) Coverage() *dagger.File {
 	// TODO: filter for better caching, had issues with embed.go
 	return t.goWithSource(t.Source).
-		WithExec([]string{"go", "test", "./...", "-count=1", "-coverprofile", coverageFile, "-coverpkg=./..."}).WithExec([]string{"./filter-coverage.sh", "<", coverageFile, ">", coverageFilteredFile}).
+		WithExec([]string{"go", "test", "./...", "-count=1", "-timeout=30s", "-coverprofile", coverageFile, "-coverpkg=./..."}).
 		Container().
+		WithExec([]string{"./filter-coverage.sh"}, dagger.ContainerWithExecOpts{
+			RedirectStdin:  coverageFile,
+			RedirectStdout: coverageFilteredFile,
+		}).
 		File(coverageFilteredFile)
 }
 
@@ -59,7 +63,7 @@ func (t *Test) CoverageTreeMap(ctx context.Context,
 	// coverage is the output file of go test with coverage.
 	coverage *dagger.File,
 ) *dagger.File {
-	src := t.Source.WithFile(coverageFile, coverage) // TODO: filter for better caching, had issues with embed.go
+	src := t.Source.WithFile(coverageFilteredFile, coverage) // TODO: filter for better caching, had issues with embed.go
 
 	svg, _ := t.goWithSource(src).
 		WithExec([]string{"go", "install", "github.com/nikolaydubina/go-cover-treemap@latest"}).
