@@ -8,10 +8,10 @@ import (
 
 // Inspired by https://github.com/machinebox/progress/blob/master/reader.go.
 
-// Reader maintains progress information on the bytes read through it.
+// readCloser maintains progress information on the bytes read through it.
 // Implements [Evaluator].
-type Reader struct {
-	reader io.Reader
+type readCloser struct {
+	rc io.ReadCloser
 
 	mu    sync.RWMutex
 	total int
@@ -19,17 +19,17 @@ type Reader struct {
 	err   error
 }
 
-// NewReader wraps an [io.Reader] with capabilities to report bytes read
+// NewReadCloser wraps an [io.Reader] with capabilities to report bytes read
 // so far and bytes read since the last check.
-func NewReader(r io.Reader) *Reader {
-	return &Reader{
-		reader: r,
+func NewReadCloseEvaluator(rc io.ReadCloser) ReadCloseEvaluator {
+	return &readCloser{
+		rc: rc,
 	}
 }
 
 // Read wraps [io.Reader.Read] with internal progress updates.
-func (r *Reader) Read(p []byte) (n int, err error) {
-	n, err = r.reader.Read(p)
+func (r *readCloser) Read(p []byte) (n int, err error) {
+	n, err = r.rc.Read(p)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -42,7 +42,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 
 // Progress returns the total number of bytes that have been read so far as
 // well as bytes read since the last call to Progress.
-func (r *Reader) Progress() (soFar, sinceLast int, err error) {
+func (r *readCloser) Progress() (soFar, sinceLast int, err error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -51,4 +51,9 @@ func (r *Reader) Progress() (soFar, sinceLast int, err error) {
 	r.delta = 0
 	err = r.err
 	return
+}
+
+// Close wraps an [io.ReadCloser.Close] method.
+func (r *readCloser) Close() error {
+	return r.rc.Close()
 }

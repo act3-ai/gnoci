@@ -2,10 +2,17 @@ package progress
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
 // Inspired by https://github.com/machinebox/progress/blob/master/progress.go.
+
+// ReadCloseEvaluator extends [io.ReadCloser] with to an [Evaluator].
+type ReadCloseEvaluator interface {
+	io.ReadCloser
+	Evaluator
+}
 
 // Evaluator facilitates progress monitoring.
 type Evaluator interface {
@@ -31,7 +38,6 @@ type Ticker struct {
 // NewTicker returns a [Ticker] reporting an [Evaluator]'s [Progress] on an interval.
 func NewTicker(ctx context.Context, eval Evaluator, d time.Duration, ch chan<- Progress) {
 	t := time.NewTicker(d)
-
 	go func() {
 		defer close(ch)
 		for {
