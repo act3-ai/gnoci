@@ -1,3 +1,5 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
-grep -v zz_generated
+grep -v \
+    -e zz_generated \
+    -e '\.gen\.go'

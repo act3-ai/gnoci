@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+//go:generate go tool mockgen -typed -package progressmock -destination ./progressmock/progressmock.gen.go github.com/act3-ai/gnoci/internal/progress Evaluator
+
 // Inspired by https://github.com/machinebox/progress/blob/master/progress.go.
 
 // EvalReadCloser extends [io.ReadCloser] with to an [Evaluator].
@@ -43,6 +45,7 @@ func NewTicker(ctx context.Context, eval Evaluator, d time.Duration, ch chan<- P
 		for {
 			select {
 			case <-ctx.Done():
+				return
 			case <-t.C:
 				total, delta, err := eval.Progress()
 				p := Progress{
