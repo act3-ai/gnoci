@@ -13,9 +13,6 @@ import (
 	"github.com/act3-ai/gnoci/internal/lfs"
 )
 
-// ErrTerminate indicates end of transfer requests.
-var ErrTerminate = errors.New("received terminate event")
-
 // Communicator provides handling of git-lfs transfer protocol
 // requests and responses.
 type Communicator interface {
