@@ -8,8 +8,8 @@ import (
 
 // Inspired by https://github.com/machinebox/progress/blob/master/progress.go.
 
-// ReadCloseEvaluator extends [io.ReadCloser] with to an [Evaluator].
-type ReadCloseEvaluator interface {
+// EvalReadCloser extends [io.ReadCloser] with to an [Evaluator].
+type EvalReadCloser interface {
 	io.ReadCloser
 	Evaluator
 }

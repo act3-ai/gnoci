@@ -19,9 +19,9 @@ type readCloser struct {
 	err   error
 }
 
-// NewReadCloser wraps an [io.Reader] with capabilities to report bytes read
+// NewEvalReadCloser wraps an [io.Reader] with capabilities to report bytes read
 // so far and bytes read since the last check.
-func NewReadCloseEvaluator(rc io.ReadCloser) ReadCloseEvaluator {
+func NewEvalReadCloser(rc io.ReadCloser) EvalReadCloser {
 	return &readCloser{
 		rc: rc,
 	}

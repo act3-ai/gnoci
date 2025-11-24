@@ -237,7 +237,7 @@ func progressOrDefault(ctx context.Context, opts *ProgressOptions, r io.ReadClos
 			d = opts.Interval
 		}
 
-		pReader := progress.NewReadCloseEvaluator(r)
+		pReader := progress.NewEvalReadCloser(r)
 		progress.NewTicker(ctx, pReader, d, opts.Info)
 		return pReader
 	}
