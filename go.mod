@@ -1,6 +1,6 @@
 module github.com/act3-ai/gnoci
 
-go 1.24.4
+go 1.25.3
 
 require (
 	github.com/act3-ai/go-common v0.0.0-20250519210101-950b1bb97e92
