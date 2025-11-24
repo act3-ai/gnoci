@@ -39,41 +39,6 @@ func (t *Test) Unit(ctx context.Context) (string, error) {
 				Stdout(ctx)
 }
 
-const (
-	coverageFile         = "coverage.out"
-	coverageFilteredFile = "coverage.filtered"
-	coverageTreemapFile  = "coverage-treemap.svg"
-)
-
-// Coverage generates a code coverage file.
-func (t *Test) Coverage() *dagger.File {
-	// TODO: filter for better caching, had issues with embed.go
-	return t.goWithSource(t.Source).
-		WithExec([]string{"go", "test", "./...", "-count=1", "-timeout=30s", "-coverprofile", coverageFile, "-coverpkg=./..."}).
-		Container().
-		WithExec([]string{"./filter-coverage.sh"}, dagger.ContainerWithExecOpts{
-			RedirectStdin:  coverageFile,
-			RedirectStdout: coverageFilteredFile,
-		}).
-		File(coverageFilteredFile)
-}
-
-// CoverageTreeMap builds a visual aid for viewing code coverage.
-func (t *Test) CoverageTreeMap(ctx context.Context,
-	// coverage is the output file of go test with coverage.
-	coverage *dagger.File,
-) *dagger.File {
-	src := t.Source.WithFile(coverageFilteredFile, coverage) // TODO: filter for better caching, had issues with embed.go
-
-	svg, _ := t.goWithSource(src).
-		WithExec([]string{"go", "install", "github.com/nikolaydubina/go-cover-treemap@latest"}).
-		Container().
-		WithExec([]string{"./bin/go-cover-treemap", "-coverprofile", coverageFilteredFile}).
-		Stdout(ctx)
-
-	return dag.File(coverageTreemapFile, svg)
-}
-
 // Push pushes a git repository to an OCI registry.
 func (t *Test) Push(ctx context.Context,
 	// Git reference to test repository

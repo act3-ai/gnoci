@@ -36,6 +36,11 @@
       "pin": "5579aa8f127350d77c970c98784f40f56d279fbd"
     },
     {
+      "name": "python",
+      "source": "github.com/sagikazarmark/daggerverse/python@6133ad18e131b891d4723b8e25d69f5de077b472",
+      "pin": "6133ad18e131b891d4723b8e25d69f5de077b472"
+    },
+    {
       "name": "release",
       "source": "github.com/act3-ai/dagger/release@release/v0.1.9",
       "pin": "33748b33d71e31975d7297922fd2267341fae06d"
