@@ -2,9 +2,8 @@
 package actions
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +18,7 @@ import (
 	"oras.land/oras-go/v2/registry"
 
 	"github.com/act3-ai/gnoci/internal/lfs"
+	"github.com/act3-ai/gnoci/internal/lfs/comms"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/act3-ai/gnoci/internal/progress"
 	"github.com/act3-ai/gnoci/pkg/apis"
@@ -35,10 +35,16 @@ type GitLFS struct {
 	// ConfigFiles contains a list of potential configuration file locations.
 	ConfigFiles []string
 
+	// local temp files
+	ociStore *file.Store
+	lfsStore string
+
 	// OCI remote
+	ref registry.Reference
 	gt  oras.GraphTarget
-	in  *bufio.Scanner
-	out io.Writer
+
+	// git-lfs request and response handler
+	comm comms.Communicator
 }
 
 // NewGitLFS creates a new Tool with default values.
@@ -47,9 +53,265 @@ func NewGitLFS(in io.Reader, out io.Writer, version string, cfgFiles []string) *
 		version:     version,
 		apiScheme:   apis.NewScheme(),
 		ConfigFiles: cfgFiles,
-		in:          bufio.NewScanner(in),
-		out:         out,
+		comm:        comms.NewCommunicator(in, out),
 	}
+}
+
+func (action *GitLFS) init(ctx context.Context, initReq *lfs.InitRequest) (func() error, error) {
+	cfg, err := action.GetConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting configuration: %w", err)
+	}
+
+	// TODO: How can we get the actual git dir?
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return nil, fmt.Errorf("opening local repository: %w", err)
+	}
+
+	ref, err := resolveAddress(ctx, initReq.Remote, repo)
+	if err != nil {
+		return nil, fmt.Errorf("resolving remote URL: %w", err)
+	}
+	action.ref = ref
+
+	// var fstorePath string
+	action.gt, _, action.ociStore, err = initRemoteConn(ctx, ref, repoOptsFromConfig(ref.Host(), cfg))
+	if err != nil {
+		return nil, fmt.Errorf("initializing remote connection: %w", err)
+	}
+
+	if initReq.Operation == lfs.DownloadOperation {
+		action.lfsStore, err = os.MkdirTemp(os.TempDir(), "git-lfs-remote-oci-pull-*")
+		if err != nil {
+			return nil, fmt.Errorf("preparing temporary LFS pull directory: %w", err)
+		}
+	}
+
+	cleanUpFn := func() error {
+		var errs []error
+		if err := action.ociStore.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing oci file store: %w", err))
+		}
+
+		if err := os.RemoveAll(action.lfsStore); err != nil {
+			errs = append(errs, fmt.Errorf("removing temporary LFS file store: %w", err))
+		}
+
+		// if err := os.RemoveAll(fstorePath); err != nil {
+		// 	slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
+		// 	errs = append(errs, fmt.Errorf("cleaning up temporary"))
+		// }
+
+		return errors.Join(errs...)
+	}
+
+	return cleanUpFn, nil
+}
+
+// Run runs the the primary git-remote-oci action.
+func (action *GitLFS) Run(ctx context.Context) error {
+	slog.DebugContext(ctx, "running git-lfs-remote-oci")
+
+	initReq, err := action.comm.ReceiveInitRequest(ctx)
+	if err != nil {
+		return fmt.Errorf("receiving InitRequest: %w", err)
+	}
+
+	cleanup, err := action.init(ctx, initReq)
+	defer func() {
+		if err := cleanup(); err != nil {
+			slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
+		}
+	}()
+	if err != nil {
+		return action.comm.WriteInitResponse(ctx, err)
+	}
+
+	remote := model.NewLFSModeler(action.ref, action.ociStore, action.gt)
+
+	subject, err := remote.FetchOrDefault(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching base git OCI metadata: %w", err)
+	}
+
+	if _, err = remote.FetchLFSOrDefault(ctx); err != nil {
+		return err
+	}
+
+	if err := action.comm.WriteInitResponse(ctx, nil); err != nil {
+		return err
+	}
+
+	switch initReq.Operation {
+	case lfs.DownloadOperation:
+		return action.runDownload(ctx, remote)
+	case lfs.UploadOperation:
+		return action.runUpload(ctx, subject, remote)
+	default:
+		// theoretically impossible
+		return fmt.Errorf("%w: %s", lfs.ErrInvalidOperation, initReq.Operation)
+	}
+}
+
+func (action *GitLFS) runDownload(ctx context.Context, remote model.ReadOnlyLFSModeler) error {
+	slog.DebugContext(ctx, "handling download requests")
+
+	for {
+		slog.DebugContext(ctx, "waiting for download request")
+
+		transferReq, err := action.comm.ReceiveTransferRequest(ctx)
+		switch {
+		case err != nil:
+			return err
+		case transferReq.Event == lfs.TerminateEvent:
+			// done
+			slog.DebugContext(ctx, "received terminate request")
+			return nil
+		case transferReq.Event != lfs.DownloadEvent:
+			// git-lfs did not adhere to it's own protocol
+			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.DownloadEvent)
+		default:
+			err := action.downloadLFSLayer(ctx, transferReq, remote)
+			err = action.comm.WriteTransferResponse(ctx, transferReq.Oid, transferReq.Path, err)
+			if err != nil {
+				return fmt.Errorf("writing transfer response: %w", err)
+			}
+		}
+	}
+}
+
+func (action *GitLFS) downloadLFSLayer(ctx context.Context, transferReq *lfs.TransferRequest, remote model.ReadOnlyLFSModeler) error {
+	pChan := make(chan progress.Progress)
+	done := make(chan struct{})
+	go func() {
+		for pUpdate := range pChan {
+			err := action.comm.WriteProgress(ctx,
+				lfs.UploadEvent,
+				transferReq.Oid,
+				pUpdate.Total,
+				pUpdate.Delta)
+			if err != nil {
+				slog.WarnContext(ctx, "writing progress",
+					slog.String("error", err.Error()))
+			}
+		}
+		done <- struct{}{}
+	}()
+
+	fetchOpts := &model.FetchLFSOptions{
+		Progress: &model.ProgressOptions{
+			Info: pChan,
+		},
+	}
+
+	// TODO: convenient that LFS uses sha256 by default, but are other digest methods out there?
+	rc, err := remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid), fetchOpts)
+	if err != nil {
+		return fmt.Errorf("fetching LFS file: %w", err)
+	}
+	defer rc.Close()
+
+	tmpFilePath := filepath.Join(action.lfsStore, transferReq.Oid)
+	f, err := os.OpenFile(tmpFilePath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("opening LFS temp file: %w", err)
+	}
+	defer f.Close()
+
+	n, err := io.Copy(f, rc)
+	<-done
+	switch {
+	case err != nil:
+		return fmt.Errorf("copying LFS temp file: %w", err)
+	case n != transferReq.Size:
+		// TODO: double check protocol spec, LFS may handle this validation for us
+		return fmt.Errorf("unexpected LFS file size, expected %d, got %d", transferReq.Size, n)
+	default:
+		return nil
+	}
+}
+
+func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor, remote model.LFSModeler) error {
+	slog.DebugContext(ctx, "handling upload requests")
+
+	for {
+		slog.DebugContext(ctx, "waiting for upload request")
+
+		transferReq, err := action.comm.ReceiveTransferRequest(ctx)
+		switch {
+		case err != nil:
+			return err
+		case transferReq.Event == lfs.TerminateEvent:
+			// done with LFS files
+			slog.DebugContext(ctx, "received terminate request")
+			_, err := remote.PushLFSManifest(ctx, subject)
+			if err != nil {
+				return fmt.Errorf("pushing LFS manifest to OCI: %w", err)
+			}
+			return nil
+		case transferReq.Event != lfs.UploadEvent:
+			// git-lfs did not adhere to it's own protocol
+			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.UploadEvent)
+		default:
+			err := action.uploadLFSLayer(ctx, transferReq, remote)
+			err = action.comm.WriteTransferResponse(ctx, transferReq.Oid, "", err)
+			if err != nil {
+				return fmt.Errorf("writing transfer response: %w", err)
+			}
+		}
+	}
+}
+
+func (action *GitLFS) uploadLFSLayer(ctx context.Context, transferReq *lfs.TransferRequest, remote model.LFSModeler) error {
+	pChan := make(chan progress.Progress) // closed by [progress.NewTicker] when reading completes
+	done := make(chan struct{})
+	go func() {
+		for pUpdate := range pChan {
+			err := action.comm.WriteProgress(ctx, lfs.UploadEvent, transferReq.Oid, pUpdate.Total, pUpdate.Delta)
+			if err != nil {
+				slog.WarnContext(ctx, "writing progress update", slog.String("error", err.Error()))
+			}
+		}
+		done <- struct{}{}
+	}()
+
+	pushOpts := &model.PushLFSOptions{
+		Progress: &model.ProgressOptions{
+			Info: pChan,
+		},
+	}
+	if _, err := remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
+		err := action.comm.WriteTransferResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
+		if err != nil {
+			<-done
+			return err
+		}
+	}
+	<-done
+
+	return nil
+}
+
+// GetScheme returns the runtime scheme used for configuration file loading.
+func (action *GitLFS) GetScheme() *runtime.Scheme {
+	return action.apiScheme
+}
+
+// GetConfig loads Configuration using the current git-remote-oci options.
+func (action *GitLFS) GetConfig(ctx context.Context) (c *v1alpha1.Configuration, err error) {
+	c = &v1alpha1.Configuration{}
+
+	slog.DebugContext(ctx, "searching for configuration files", slog.Any("cfgFiles", action.ConfigFiles))
+
+	err = config.Load(slog.Default(), action.GetScheme(), c, action.ConfigFiles)
+	if err != nil {
+		return c, fmt.Errorf("loading configuration: %w", err)
+	}
+
+	defer slog.DebugContext(ctx, "using config", slog.Any("configuration", c))
+
+	return c, nil
 }
 
 // resolveAddress trims an OCI URL or resolves a shortname to a URL.
@@ -85,330 +347,4 @@ func resolveAddress(ctx context.Context, remote string, repo *git.Repository) (r
 // trimProtocol trims a oci:// protocol prefix.
 func trimProtocol(remote string) string {
 	return strings.TrimPrefix(remote, "oci://")
-}
-
-// Run runs the the primary git-remote-oci action.
-func (action *GitLFS) Run(ctx context.Context) error {
-	slog.DebugContext(ctx, "running git-lfs-remote-oci")
-	line, err := action.readLine()
-	if err != nil {
-		return err
-	}
-
-	// first message is always an InitRequest
-	var initReq lfs.InitRequest
-	if err := json.Unmarshal(line, &initReq); err != nil {
-		return fmt.Errorf("decoding InitRequest: %w", err)
-	}
-
-	if err := initReq.Validate(); err != nil {
-		return err
-	}
-
-	// TODO: How can we get the actual git dir?
-	repo, err := git.PlainOpen(".")
-	if err != nil {
-		return fmt.Errorf("opening local repository: %w", err)
-	}
-
-	ref, err := resolveAddress(ctx, initReq.Remote, repo)
-	if err != nil {
-		return fmt.Errorf("resolving remote URL: %w", err)
-	}
-
-	cfg, err := action.GetConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("getting configuration: %w", err)
-	}
-
-	var fstorePath string
-	var fstore *file.Store
-	action.gt, fstorePath, fstore, err = initRemoteConn(ctx, ref, repoOptsFromConfig(ref.Host(), cfg))
-	if err != nil {
-		return fmt.Errorf("initializing: %w", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(fstorePath); err != nil {
-			slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
-		}
-	}()
-	defer func() {
-		if err := fstore.Close(); err != nil {
-			slog.ErrorContext(ctx, "closing OCI file store", slog.String("error", err.Error()))
-		}
-	}()
-
-	remote := model.NewLFSModeler(ref, fstore, action.gt)
-
-	subject, err := remote.FetchOrDefault(ctx)
-	if err != nil {
-		return fmt.Errorf("fetching base git OCI metadata: %w", err)
-	}
-
-	_, err = remote.FetchLFSOrDefault(ctx)
-	if err != nil {
-		return err
-	}
-
-	action.writeInitResponse(ctx, nil)
-
-	switch initReq.Operation {
-	case lfs.DownloadOperation:
-		return action.runDownload(ctx, remote)
-	case lfs.UploadOperation:
-		return action.runUpload(ctx, subject, remote)
-	default:
-		// theoretically impossible
-		return fmt.Errorf("%w: %s", lfs.ErrInvalidOperation, initReq.Operation)
-	}
-}
-
-func (action *GitLFS) runDownload(ctx context.Context, remote model.ReadOnlyLFSModeler) error {
-	slog.DebugContext(ctx, "handling download requests")
-
-	tmpDir, err := os.MkdirTemp(os.TempDir(), "git-lfs-remote-oci-pull-*")
-	if err != nil {
-		return fmt.Errorf("preparing temporary LFS pull directory: %w", err)
-	}
-
-	for {
-		slog.DebugContext(ctx, "waiting for download request")
-		line, err := action.readLine()
-		if err != nil {
-			return err
-		}
-		slog.DebugContext(ctx, "received download request", slog.String("request", string(line)))
-
-		var transferReq lfs.TransferRequest
-		if err := json.Unmarshal(line, &transferReq); err != nil {
-			return fmt.Errorf("decoding TransferRequest: %w", err)
-		}
-
-		if transferReq.Event == lfs.TerminateEvent {
-			slog.DebugContext(ctx, "received terminate request")
-			break
-		}
-
-		// TODO: validate the transfer request
-		// HACK
-		if transferReq.Event != lfs.DownloadEvent {
-			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.DownloadEvent)
-		}
-
-		// HACK: is this necessary? per the spec, we "should"
-		action.writeProgress(ctx, transferReq.Oid, 1, 1)
-
-		// TODO: convenient that LFS uses sha256, but are other digest methods out there?
-		rc, err := remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid))
-		if err != nil {
-			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("fetching LFS file: %w", err))
-			continue
-		}
-
-		tmpFilePath := filepath.Join(tmpDir, transferReq.Oid)
-		f, err := os.OpenFile(tmpFilePath, os.O_RDWR|os.O_CREATE, 0644)
-		if err != nil {
-			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("opening LFS temp file: %w", err))
-			continue
-		}
-
-		n, err := io.Copy(f, rc)
-		rc.Close()
-		f.Close()
-		switch {
-		case err != nil:
-			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("copying LFS temp file: %w", err))
-		case n != transferReq.Size:
-			// TODO: double check protocol spec, LFS may handle this validation for us
-			action.writeTransferResponse(ctx, transferReq.Oid, "", fmt.Errorf("unexpected LFS file size, expected %d, got %d", transferReq.Size, n))
-		default:
-			action.writeTransferResponse(ctx, transferReq.Oid, tmpFilePath, nil)
-		}
-	}
-
-	return nil
-}
-
-func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor, remote model.LFSModeler) error {
-	slog.DebugContext(ctx, "handling upload requests")
-	// TODO: by their protocol spec, they block until the transfer is complete
-	// this is far less than ideal for us. Unfortunately, we may not be able
-	// to do this concurrently as we would not be able to update the LFS
-	// manifest across processes, as their concurrency is done with multiple
-	// invocations of our tool.
-	// TODO: if the above is true, we need to refactor such that we write err
-	// responses to git-lfs within the goroutines spun up by model.LFSModeler.PushLFS
-	for {
-		slog.DebugContext(ctx, "waiting for upload request")
-		line, err := action.readLine()
-		if err != nil {
-			return err
-		}
-		slog.DebugContext(ctx, "received upload request", slog.String("request", string(line)))
-
-		var transferReq lfs.TransferRequest
-		if err := json.Unmarshal(line, &transferReq); err != nil {
-			// TODO: is it possible to write back to git-lfs here or is this fatal?
-			return fmt.Errorf("decoding TransferRequest: %w", err)
-		}
-
-		if transferReq.Event == lfs.TerminateEvent {
-			slog.DebugContext(ctx, "received terminate request")
-			break
-		}
-
-		// TODO: validate the transfer request
-		// HACK
-		if transferReq.Event != lfs.UploadEvent {
-			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.UploadEvent)
-		}
-
-		pChan := make(chan progress.Progress)
-		done := make(chan struct{})
-		go func() {
-			for pUpdate := range pChan {
-				action.writeProgress(ctx, transferReq.Oid, pUpdate.Total, pUpdate.Delta)
-			}
-			done <- struct{}{}
-		}()
-
-		pushOpts := &model.PushLFSOptions{
-			Progress: &model.ProgressOptions{
-				Info: pChan,
-			},
-		}
-		if _, err := remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
-			action.writeTransferResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
-			<-done
-			continue
-		}
-		<-done
-
-		// notify completion
-		action.writeTransferResponse(ctx, transferReq.Oid, "", nil)
-	}
-
-	_, err := remote.PushLFSManifest(ctx, subject)
-	if err != nil {
-		return fmt.Errorf("pushing LFS to OCI: %w", err)
-	}
-
-	return nil
-}
-
-func (action *GitLFS) writeInitResponse(ctx context.Context, err error) {
-	slog.DebugContext(ctx, "writing init response")
-
-	// TODO: is this necessary or can we marshal with an empty error?
-	raw := []byte("{}")
-	if err != nil {
-		initResp := lfs.InitResponse{
-			Error: lfs.ErrCodeMessage{
-				Code:    1,
-				Message: err.Error(),
-			},
-		}
-
-		var err error
-		raw, err = json.Marshal(initResp)
-		if err != nil {
-			slog.ErrorContext(ctx, "encoding init response", slog.String("error", err.Error()))
-			return
-		}
-	}
-
-	if _, err := action.out.Write(withNewline(raw)); err != nil {
-		slog.ErrorContext(ctx, "writing init response", slog.String("error", err.Error()))
-	}
-	slog.DebugContext(ctx, "wrote init resonse", slog.String("response", string(raw)))
-}
-
-func (action *GitLFS) writeProgress(ctx context.Context, oid string, soFar, sinceLast int) {
-	log := slog.With(slog.String("event", string(lfs.UploadEvent)), slog.String("oid", oid))
-
-	progressResp := lfs.ProgressResponse{
-		Event:          lfs.ProgessEvent,
-		Oid:            oid,
-		BytesSoFar:     soFar,
-		BytesSinceLast: sinceLast,
-	}
-
-	raw, err := json.Marshal(progressResp)
-	if err != nil {
-		log.ErrorContext(ctx, "encoding progress response", slog.String("error", err.Error()))
-		return
-	}
-
-	if _, err := action.out.Write(withNewline(raw)); err != nil {
-		log.ErrorContext(ctx, "writing progress response", slog.String("error", err.Error()))
-	}
-}
-
-func (action *GitLFS) writeTransferResponse(ctx context.Context, oid string, path string, err error) {
-	log := slog.With(slog.String("oid", oid))
-	log.DebugContext(ctx, "writing transfer response")
-
-	transferResp := lfs.TransferResponse{
-		Event: lfs.CompleteEvent,
-		Path:  path,
-		Oid:   oid,
-	}
-	if err != nil {
-		transferResp.Error = &lfs.ErrCodeMessage{
-			Code:    1,
-			Message: err.Error(),
-		}
-	}
-
-	raw, err := json.Marshal(transferResp)
-	if err != nil {
-		log.ErrorContext(ctx, "encoding transfer response", slog.String("error", err.Error()))
-		return
-	}
-
-	if _, err := action.out.Write(withNewline(raw)); err != nil {
-		log.ErrorContext(ctx, "writing transfer response", slog.String("error", err.Error()))
-	}
-
-	log.DebugContext(ctx, "wrote transfer response", slog.String("response", string(raw)))
-}
-
-// readLine
-// TODO: consider making this generic.
-func (action *GitLFS) readLine() ([]byte, error) {
-	ok := action.in.Scan()
-	switch {
-	case !ok && action.in.Err() != nil:
-		return nil, fmt.Errorf("reading single command from git-lfs: %w", action.in.Err())
-	case !ok:
-		// EOF
-		return nil, nil
-	default:
-		return action.in.Bytes(), nil
-	}
-}
-
-func withNewline(line []byte) []byte {
-	return append(line, []byte("\n")...)
-}
-
-// GetScheme returns the runtime scheme used for configuration file loading.
-func (action *GitLFS) GetScheme() *runtime.Scheme {
-	return action.apiScheme
-}
-
-// GetConfig loads Configuration using the current git-remote-oci options.
-func (action *GitLFS) GetConfig(ctx context.Context) (c *v1alpha1.Configuration, err error) {
-	c = &v1alpha1.Configuration{}
-
-	slog.DebugContext(ctx, "searching for configuration files", slog.Any("cfgFiles", action.ConfigFiles))
-
-	err = config.Load(slog.Default(), action.GetScheme(), c, action.ConfigFiles)
-	if err != nil {
-		return c, fmt.Errorf("loading configuration: %w", err)
-	}
-
-	defer slog.DebugContext(ctx, "using config", slog.Any("configuration", c))
-
-	return c, nil
 }

@@ -34,7 +34,7 @@ type ReadOnlyLFSModeler interface {
 	// manifest if the remote does not exist.
 	FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error)
 	// FetchLFSLayer fetches an LFS file from a layer in the git-lfs OCI data model.
-	FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
+	FetchLFSLayer(ctx context.Context, dgst digest.Digest, opts *FetchLFSOptions) (io.ReadCloser, error)
 }
 
 // LFSModeler extends [Modeler] with LFS support.
@@ -82,18 +82,26 @@ func (m *model) FetchLFS(ctx context.Context) (ocispec.Descriptor, error) {
 	return m.lfsManDesc, nil
 }
 
-func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+// FetchLFSOptions define optional parameters for fetching LFS files.
+type FetchLFSOptions struct {
+	Progress *ProgressOptions
+}
+
+func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest, opts *FetchLFSOptions) (io.ReadCloser, error) {
 	slog.DebugContext(ctx, "fetching LFS file", slog.String("digest", dgst.String()))
-	// TODO: reverse iter? it is more likely we'll want to fetch newer layers
-	for _, desc := range m.lfsMan.Layers {
-		if desc.Digest == dgst {
-			rc, err := m.gt.Fetch(ctx, desc)
+
+	for i := len(m.lfsMan.Layers) - 1; i == 0; i-- {
+		if m.lfsMan.Layers[i].Digest == dgst {
+
+			rc, err := m.gt.Fetch(ctx, m.lfsMan.Layers[i])
 			if err != nil {
 				return nil, fmt.Errorf("fetching layer: %w", err)
 			}
-			return rc, nil
+
+			return progressOrDefault(ctx, opts.Progress, rc), nil
 		}
 	}
+
 	return nil, fmt.Errorf("%w: %s", errLayerNotInManifest, dgst.String())
 }
 
@@ -177,7 +185,7 @@ func (m *model) PushLFSFile(ctx context.Context, path string, opts *PushLFSOptio
 
 	// stay idempotent if the same LFS file is added multiple times.
 	for _, desc := range m.lfsMan.Layers {
-		// HACK: this check smells bad, but LFS should be providing use with
+		// HACK: this check smells bad, but LFS should be providing us with
 		// the actual LFS file in .git/*
 		if desc.Digest.Encoded() == filepath.Base(path) {
 			// unlikely hash collision?
@@ -192,10 +200,10 @@ func (m *model) PushLFSFile(ctx context.Context, path string, opts *PushLFSOptio
 	if err != nil {
 		return ocispec.Descriptor{}, fmt.Errorf("fetching LFS file from temporary filestore: %w", err)
 	}
+	rc = progressOrDefault(ctx, opts.Progress, rc)
 	defer rc.Close()
 
-	r := progressOrDefault(ctx, opts.Progress, rc)
-	if err := m.gt.Push(ctx, newDesc, r); err != nil {
+	if err := m.gt.Push(ctx, newDesc, rc); err != nil {
 		return ocispec.Descriptor{}, fmt.Errorf("pushing LFS file: %w", err)
 	}
 
@@ -222,14 +230,14 @@ func (m *model) referrer(ctx context.Context) (ocispec.Descriptor, error) {
 }
 
 // progressOrDefault returns a [progress.Ticker] if ProgressOptions have it enabled.
-func progressOrDefault(ctx context.Context, opts *ProgressOptions, r io.Reader) io.Reader {
+func progressOrDefault(ctx context.Context, opts *ProgressOptions, r io.ReadCloser) io.ReadCloser {
 	if opts != nil && opts.Info != nil {
 		d := defaultProgressInterval
 		if opts.Interval != 0 {
 			d = opts.Interval
 		}
 
-		pReader := progress.NewReader(r)
+		pReader := progress.NewEvalReadCloser(r)
 		progress.NewTicker(ctx, pReader, d, opts.Info)
 		return pReader
 	}

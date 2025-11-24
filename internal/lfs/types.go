@@ -84,7 +84,7 @@ func (r *InitRequest) Validate() error {
 
 // InitResponse is the response to an [InitRequest].
 type InitResponse struct {
-	Error ErrCodeMessage `json:"error"`
+	Error ErrCodeMessage `json:"error,omitempty"`
 }
 
 // TransferRequest is sent by git-lfs for 0..N transfers.
