@@ -7,6 +7,8 @@ import (
 )
 
 const (
+	goCoverTreemap = "github.com/nikolaydubina/go-cover-treemap@latest"
+
 	coverageFile         = "coverage.out"
 	coverageFilteredFile = "coverage.filtered"
 	coverageTreemapFile  = "coverage-treemap.svg"
@@ -48,10 +50,8 @@ func (t *Test) CoverageTreeMap(ctx context.Context,
 	// coverage is the output file of go test with coverage.
 	coverage *dagger.File,
 ) *dagger.File {
-	src := t.Source.WithFile(coverageFilteredFile, coverage) // TODO: filter for better caching, had issues with embed.go
-
-	svg, _ := t.goWithSource(src).
-		WithExec([]string{"go", "install", "github.com/nikolaydubina/go-cover-treemap@latest"}).
+	svg, _ := t.goWithSource(dag.Directory().WithFile(coverageFilteredFile, coverage)).
+		WithExec([]string{"go", "install", goCoverTreemap}).
 		Container().
 		WithExec([]string{"./bin/go-cover-treemap", "-coverprofile", coverageFilteredFile}).
 		Stdout(ctx)
@@ -59,23 +59,18 @@ func (t *Test) CoverageTreeMap(ctx context.Context,
 	return dag.File(coverageTreemapFile, svg)
 }
 
+// CoverageBadge generates a badge with the code coverage percentage.
 func (t *Test) CoverageBadge(ctx context.Context,
 	// coverage is the output file of go test with coverage.
 	coverage *dagger.File,
 ) *dagger.File {
-	coverageValue, _ := t.goWithSource(t.Source).
+	coverageValue, _ := t.goWithSource(t.Source.WithFile(coverageFilteredFile, coverage)).
 		Container().
-		WithFile(coverageValueScript, t.Source.File(coverageValueScript)).
-		WithFile(coverageFilteredFile, t.Coverage()).
-		WithExec([]string{"./" + coverageValueScript, coverageFilteredFile},
-			dagger.ContainerWithExecOpts{
-				RedirectStdin: coverageFilteredFile,
-			}).
+		WithExec([]string{"./" + coverageValueScript, coverageFilteredFile}).
 		Stdout(ctx)
 
 	return dag.Python().
 		Container().
-		WithFile(coverageFilteredFile, coverage).
 		WithExec([]string{"pip", "install", "anybadge"}).
 		WithExec([]string{"anybadge",
 			"--label", "coverage",
