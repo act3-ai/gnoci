@@ -29,16 +29,8 @@ tasks:
     desc: "Generate code coverage badge and treemap for README.md docs."
     cmds:
       - |
-        dagger -c 'test | coverage | export -- docs/figures/badges/coverage.filtered'
-        dagger -c 'test | coverage-tree-map -- docs/figures/badges/coverage.filtered | export -- docs/figures/badges/coverage-treemap.svg'
+        dagger -c 'test | coverage-docs | export -- docs/figures/badges/coverage/'
 
-        COVERAGE=$(go tool cover -func=docs/figures/badges/coverage.filtered | grep total | awk '{print $3}' | sed 's/%//')
-
-        rm docs/figures/badges/coverage.svg
-        anybadge --label=coverage --value=$COVERAGE \
-          --file=docs/figures/badges/coverage.svg \
-          50=red 80=yellow 100=green
-  
   go-generate:
     desc: "Run go generate."
     sources:

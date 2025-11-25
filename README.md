@@ -2,7 +2,7 @@
 
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/act3-ai/gnoci)
 [![dagger](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml/badge.svg)](https://github.com/act3-ai/gnoci/actions/workflows/github-actions.yaml)
-![Coverage](docs/figures/badges/coverage.svg)
+![Coverage](docs/figures/badges/coverage/coverage.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/act3-ai/gnoci)](https://goreportcard.com/report/github.com/act3-ai/gnoci)
 ![License](https://img.shields.io/github/license/act3-ai/gnoci)
 
@@ -49,7 +49,7 @@ For more information see the [project proposal](./docs/proposal/proposal.md).
 
 ## Code Coverage
 
-![Coverage](docs/figures/badges/coverage-treemap.svg)
+![Coverage](docs/figures/badges/coverage/coverage-treemap.svg)
 
 ## Documentation
 
