@@ -36,8 +36,8 @@ func (t *Test) CoverageDocs(ctx context.Context) *dagger.Directory {
 func (t *Test) Coverage() *dagger.File {
 	// TODO: filter for better caching, had issues with embed.go
 	return t.goWithSource(t.Source).
-		WithExec([]string{"go", "test", "-count=1", "-timeout=30s", "./...", "-coverprofile", coverageFile, "-coverpkg=./..."}).
 		Container().
+		WithExec([]string{"go", "test", "-count=1", "-timeout=30s", "./...", "-coverprofile", coverageFile, "-coverpkg=./..."}).
 		WithExec([]string{"./" + coverageFilterScript}, dagger.ContainerWithExecOpts{
 			RedirectStdin:  coverageFile,
 			RedirectStdout: coverageFilteredFile,
