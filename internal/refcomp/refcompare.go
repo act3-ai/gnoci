@@ -36,8 +36,8 @@ type RefComparer interface {
 	// GetStatus(remoteName plumbing.ReferenceName) (status, bool)
 }
 
-// refCompare implements [RefComparer].
-type refCompare struct {
+// refCompareCached implements [RefComparer].
+type refCompareCached struct {
 	local  git.Repository
 	remote model.Modeler
 
@@ -58,7 +58,7 @@ type RefPair struct {
 
 // NewCachedRefComparer initializes a RefComparer that caches all ref comparisons.
 func NewCachedRefComparer(local git.Repository, remote model.Modeler) RefComparer {
-	return &refCompare{
+	return &refCompareCached{
 		local:  local,
 		remote: remote,
 		refs:   make(map[plumbing.ReferenceName]RefPair, 0),
@@ -66,17 +66,21 @@ func NewCachedRefComparer(local git.Repository, remote model.Modeler) RefCompare
 }
 
 // Compare compares a local and remote refence by name.
-func (rc *refCompare) Compare(ctx context.Context, force bool, localName, remoteName plumbing.ReferenceName) (RefPair, error) {
+func (rc *refCompareCached) Compare(ctx context.Context, force bool, localName, remoteName plumbing.ReferenceName) (RefPair, error) {
 	rp, ok := rc.refs[remoteName]
 	if ok {
 		return rp, nil
 	}
 
-	localRef, err := rc.local.Reference(localName, true)
-	if err != nil {
-		return RefPair{}, fmt.Errorf("resolving hash of local reference %s: %w", localName.String(), err)
+	var localRef *plumbing.Reference
+	if localName != "" {
+		var err error
+		localRef, err = rc.local.Reference(localName, true)
+		if err != nil {
+			return RefPair{}, fmt.Errorf("resolving hash of local reference %s: %w", localName.String(), err)
+		}
+		slog.InfoContext(ctx, "resolved local reference", "ref", localName.String(), "hash", localRef.Hash().String())
 	}
-	slog.InfoContext(ctx, "resolved local reference", "ref", localName.String(), "hash", localRef.Hash().String())
 
 	remoteRef, _, err := rc.remote.ResolveRef(ctx, remoteName)
 	switch {
@@ -86,7 +90,7 @@ func (rc *refCompare) Compare(ctx context.Context, force bool, localName, remote
 		// model.ErrUnsupportedReferenceType, and other errs, are propagated
 		return RefPair{}, fmt.Errorf("resolving remote reference: %w", err)
 	default:
-		slog.InfoContext(ctx, "resolved remote reference", "ref", localName.String(), "hash", remoteRef.Hash().String())
+		slog.InfoContext(ctx, "resolved remote reference", "ref", remoteName.String(), "hash", remoteRef.Hash().String())
 	}
 
 	rp, err = rc.compare(force, localRef, remoteRef)
@@ -98,7 +102,7 @@ func (rc *refCompare) Compare(ctx context.Context, force bool, localName, remote
 	return rp, nil
 }
 
-func (rc *refCompare) compare(force bool, localRef, remoteRef *plumbing.Reference) (RefPair, error) {
+func (rc *refCompareCached) compare(force bool, localRef, remoteRef *plumbing.Reference) (RefPair, error) {
 	rp := RefPair{
 		Local:  localRef,
 		Remote: remoteRef,
