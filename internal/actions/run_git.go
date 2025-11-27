@@ -9,16 +9,17 @@ import (
 	"os"
 	"strings"
 
+	gogit "github.com/go-git/go-git/v5"
 	"k8s.io/apimachinery/pkg/runtime"
 	"oras.land/oras-go/v2/registry"
 
 	"github.com/act3-ai/gnoci/internal/cmd"
+	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/act3-ai/gnoci/internal/ociutil"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/act3-ai/gnoci/pkg/apis"
 	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
 	"github.com/act3-ai/go-common/pkg/config"
-	"github.com/go-git/go-git/v5"
 )
 
 // Git represents the base action.
@@ -32,7 +33,7 @@ type Git struct {
 
 	// local repository
 	gitDir string
-	local  *git.Repository
+	local  git.Repository
 
 	// OCI remote
 	name    string // may have same value as address
@@ -134,23 +135,25 @@ func (action *Git) handleCmd(ctx context.Context) (bool, error) {
 }
 
 // localRepo opens the local repository if it hasn't been opened already.
-func (action *Git) localRepo() (*git.Repository, error) {
+func (action *Git) localRepo() (git.Repository, error) {
 	if action.local == nil {
 		if action.gitDir == "" {
 			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
 		}
-		var err error
-		action.local, err = git.PlainOpen(action.gitDir)
+
+		r, err := gogit.PlainOpen(action.gitDir)
 		if err != nil {
 			return nil, fmt.Errorf("opening local repository: %w", err)
 		}
+		action.local = git.NewRepository(r)
+
 	}
 
 	return action.local, nil
 }
 
 func (action *Git) handleList(ctx context.Context, gc cmd.Git) error {
-	var local *git.Repository
+	var local git.Repository
 	var err error
 	if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
 		local, err = action.localRepo()

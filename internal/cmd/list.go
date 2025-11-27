@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/go-git/go-git/v5"
+	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
 )
 
 // HandleList executes the list command. Lists refs one per line.
-func HandleList(ctx context.Context, local *git.Repository, remote model.Modeler, forPush bool, g Git, w Writer) error {
+func HandleList(ctx context.Context, local git.Repository, remote model.Modeler, forPush bool, g Git, w Writer) error {
 	var headRef *plumbing.Reference
 	var err error
 	if !forPush && local != nil {

@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/act3-ai/gnoci/internal/ociutil/model"
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/opencontainers/go-digest"
+
+	"github.com/act3-ai/gnoci/internal/git"
+	"github.com/act3-ai/gnoci/internal/ociutil/model"
 )
 
 // Status represents the result of a reference comparison.
@@ -37,7 +38,7 @@ type RefComparer interface {
 
 // refCompare implements [RefComparer].
 type refCompare struct {
-	local  *git.Repository
+	local  git.Repository
 	remote model.Modeler
 
 	refs map[plumbing.ReferenceName]RefPair // key is remote ref name
@@ -56,7 +57,7 @@ type RefPair struct {
 }
 
 // NewCachedRefComparer initializes a RefComparer that caches all ref comparisons.
-func NewCachedRefComparer(local *git.Repository, remote model.Modeler) RefComparer {
+func NewCachedRefComparer(local git.Repository, remote model.Modeler) RefComparer {
 	return &refCompare{
 		local:  local,
 		remote: remote,

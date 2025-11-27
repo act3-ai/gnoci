@@ -5,16 +5,17 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/act3-ai/gnoci/internal/ociutil/model"
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/opencontainers/go-digest"
+
+	"github.com/act3-ai/gnoci/internal/git"
+	"github.com/act3-ai/gnoci/internal/ociutil/model"
 )
 
 // HandleFetch executes a batch of fetch commands.
-func HandleFetch(ctx context.Context, local *git.Repository, remote model.ReadOnlyModeler, cmds []Git, w Writer) error {
+func HandleFetch(ctx context.Context, local git.Repository, remote model.ReadOnlyModeler, cmds []Git, w Writer) error {
 	_, err := remote.Fetch(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching remote metadata: %w", err)
@@ -49,7 +50,7 @@ func HandleFetch(ctx context.Context, local *git.Repository, remote model.ReadOn
 		// TODO: we may want to use packfile.WritePackfileToObjectStorage directly
 		// what's the difference here? writing the objects themselves rather than the
 		// entire packfile? If the objects already exist in another packfile will they be duplicated?
-		st, ok := local.Storer.(storer.Storer)
+		st, ok := local.Storer().(storer.Storer)
 		if !ok {
 			return fmt.Errorf("repository storer is not a storer.Storer")
 		}
