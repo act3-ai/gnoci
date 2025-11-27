@@ -12,8 +12,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/act3-ai/gnoci/pkg/oci"
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/opencontainers/go-digest"
@@ -24,6 +22,9 @@ import (
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/errdef"
 	"oras.land/oras-go/v2/registry"
+
+	"github.com/act3-ai/gnoci/internal/git"
+	"github.com/act3-ai/gnoci/pkg/oci"
 )
 
 var (
@@ -59,7 +60,7 @@ type ReadOnlyModeler interface {
 	TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
 	// CommitExists uses a local repository to resolve the best known OCI layer containing the commit.
 	// a nil error with an empty layer indicates a commit does not exist.
-	CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error)
+	CommitExists(localRepo git.Repository, commit *object.Commit) (digest.Digest, error)
 }
 
 // Modeler extends [ReadOnlyModeler] with updating and pushing a Git OCI data model to
@@ -362,7 +363,7 @@ func (m *model) DeleteRef(ctx context.Context, refName plumbing.ReferenceName) e
 	}
 }
 
-func (m *model) CommitExists(localRepo *git.Repository, commit *object.Commit) (digest.Digest, error) {
+func (m *model) CommitExists(localRepo git.Repository, commit *object.Commit) (digest.Digest, error) {
 	// most efficient with a relatively new base layer containing few refs
 	// TODO: room for optimization?
 	for _, layer := range m.man.Layers {

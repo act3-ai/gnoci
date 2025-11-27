@@ -10,18 +10,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-git/go-git/v5"
+	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/revlist"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 
+	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/act3-ai/gnoci/internal/refcomp"
 )
 
 // HandlePush executes a batch of push commands.
-func HandlePush(ctx context.Context, local *git.Repository, localDir string, remote model.Modeler, cmds []Git, bw BatchWriter) error {
+func HandlePush(ctx context.Context, local git.Repository, localDir string, remote model.Modeler, cmds []Git, bw BatchWriter) error {
 	// compare local refs to remote
 	newCommits, refsInNewPack, results := compareRefs(ctx, local, remote, cmds)
 
@@ -42,12 +43,12 @@ func HandlePush(ctx context.Context, local *git.Repository, localDir string, rem
 		}
 	}()
 
-	tmpRepo, err := git.PlainInitWithOptions(tmpDir, &git.PlainInitOptions{})
+	tmpRepo, err := gogit.PlainInitWithOptions(tmpDir, &gogit.PlainInitOptions{})
 	if err != nil {
 		return fmt.Errorf("initializing temp repository for packfile storage: %w", err)
 	}
 
-	packHash, err := createPack(local, tmpRepo, newReachableObjs)
+	packHash, err := createPack(local, git.NewRepository(tmpRepo), newReachableObjs)
 	if err != nil {
 		return fmt.Errorf("creating packfile: %w", err)
 	}
@@ -89,7 +90,7 @@ func HandlePush(ctx context.Context, local *git.Repository, localDir string, rem
 // compareRefs compares all references in the set of push cmds between the local
 // and remote repositories, returning a set of new commit hashes, references to
 // commits in the to-be-created packfile, and a list of results to be written to Git.
-func compareRefs(ctx context.Context, local *git.Repository, remote model.Modeler, cmds []Git) ([]plumbing.Hash, []*plumbing.Reference, []string) {
+func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler, cmds []Git) ([]plumbing.Hash, []*plumbing.Reference, []string) {
 	rc := refcomp.NewCachedRefComparer(local, remote)
 
 	// resolve state of refs in remote
@@ -166,7 +167,7 @@ func compareRefs(ctx context.Context, local *git.Repository, remote model.Modele
 
 // reachableObjs resolves ALL commits reachable from newCommits, excluding those
 // existing in the remote.
-func reachableObjs(local *git.Repository, remote model.Modeler, newCommits []plumbing.Hash) ([]plumbing.Hash, error) {
+func reachableObjs(local git.Repository, remote model.Modeler, newCommits []plumbing.Hash) ([]plumbing.Hash, error) {
 	headRefs := remote.HeadRefs()
 	tagRefs := remote.TagRefs()
 	ignoreCommits := make([]plumbing.Hash, 0, len(tagRefs)+len(headRefs))
@@ -180,7 +181,7 @@ func reachableObjs(local *git.Repository, remote model.Modeler, newCommits []plu
 		ignoreCommits = append(ignoreCommits, plumbing.NewHash(refInfo.Commit))
 	}
 
-	newReachableObjs, err := revlist.Objects(local.Storer, newCommits, ignoreCommits)
+	newReachableObjs, err := revlist.Objects(local.Storer(), newCommits, ignoreCommits)
 	if err != nil {
 		return nil, fmt.Errorf("resolving new reachable objects: %w", err)
 	}
@@ -213,9 +214,9 @@ func reachableObjs(local *git.Repository, remote model.Modeler, newCommits []plu
 // }
 
 // createPack builds a packfile using a set of hashes.
-func createPack(local, tmp *git.Repository, hashes []plumbing.Hash) (h plumbing.Hash, err error) {
+func createPack(local, tmp git.Repository, hashes []plumbing.Hash) (h plumbing.Hash, err error) {
 	// reference implementation: https://github.com/go-git/go-git/blob/v5.16.2/repository.go#L1815
-	pfw, ok := tmp.Storer.(storer.PackfileWriter)
+	pfw, ok := tmp.Storer().(storer.PackfileWriter)
 	if !ok {
 		return h, fmt.Errorf("repository storer is not a storer.PackfileWriter")
 	}
@@ -226,7 +227,7 @@ func createPack(local, tmp *git.Repository, hashes []plumbing.Hash) (h plumbing.
 	defer wc.Close()
 
 	// TODO: What is a ref delta?
-	enc := packfile.NewEncoder(wc, local.Storer, true)
+	enc := packfile.NewEncoder(wc, local.Storer(), true)
 	h, err = enc.Encode(hashes, 10) // default window
 	if err != nil {
 		return h, fmt.Errorf("encoding packfile: %w", err)
