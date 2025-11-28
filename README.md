@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/act3-ai/gnoci)](https://goreportcard.com/report/github.com/act3-ai/gnoci)
 ![License](https://img.shields.io/github/license/act3-ai/gnoci)
 
-Pronounced as [gnocchi](https://www.merriam-webster.com/dictionary/gnocchi).
+Pronounced as gnocchi.
 
 This project has three main objectives:
 
