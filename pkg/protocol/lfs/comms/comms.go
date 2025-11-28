@@ -35,7 +35,7 @@ type ResponseHandler interface {
 	WriteInitResponse(ctx context.Context, err error) error
 	// WriteProgress sends a [lfs.ProgressResponse] message, after an
 	// [lfs.TransferRequest], and before an [lfs.TransferResponse].
-	WriteProgress(ctx context.Context, event lfs.Event, oid string, soFar, sinceLast int) error
+	WriteProgress(ctx context.Context, oid string, soFar, sinceLast int) error
 	// WriteTransferUploadResponse is the final response to an [lfs.TransferRequest],
 	// with event type [lfs.UploadEvent] after zero or more
 	// [ResponseHandler.WriteProgress] messages.
@@ -128,9 +128,8 @@ func (c *defaultCommunicator) WriteInitResponse(ctx context.Context, initErr err
 
 // WriteProgress sends transfer progress information, after an [lfs.TransferRequest],
 // and before an [lfs.TransferResponse].
-func (c *defaultCommunicator) WriteProgress(ctx context.Context, event lfs.Event, oid string, soFar, sinceLast int) error {
+func (c *defaultCommunicator) WriteProgress(ctx context.Context, oid string, soFar, sinceLast int) error {
 	slog.DebugContext(ctx, "writing progress response",
-		slog.String("event", string(event)),
 		slog.String("oid", oid),
 		slog.Int("soFar", soFar),
 		slog.Int("sinceLast", sinceLast))

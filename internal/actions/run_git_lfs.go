@@ -187,7 +187,6 @@ func (action *GitLFS) downloadLFSLayer(ctx context.Context, transferReq *lfs.Tra
 	go func() {
 		for pUpdate := range pChan {
 			err := action.comm.WriteProgress(ctx,
-				lfs.DownloadEvent,
 				transferReq.Oid,
 				pUpdate.Total,
 				pUpdate.Delta)
@@ -268,7 +267,7 @@ func (action *GitLFS) uploadLFSLayer(ctx context.Context, transferReq *lfs.Trans
 	done := make(chan struct{})
 	go func() {
 		for pUpdate := range pChan {
-			err := action.comm.WriteProgress(ctx, lfs.UploadEvent, transferReq.Oid, pUpdate.Total, pUpdate.Delta)
+			err := action.comm.WriteProgress(ctx, transferReq.Oid, pUpdate.Total, pUpdate.Delta)
 			if err != nil {
 				slog.WarnContext(ctx, "writing progress update", slog.String("error", err.Error()))
 			}
