@@ -209,7 +209,7 @@ func (r *ProgressResponse) Validate() error {
 		errs = append(errs, fmt.Errorf("%w: got BytesSoFar = %d", ErrInvalidProgressValue, r.BytesSoFar))
 	}
 
-	if r.BytesSoFar < 0 {
+	if r.BytesSinceLast < 0 {
 		errs = append(errs, fmt.Errorf("%w: got BytesSinceLast = %d", ErrInvalidProgressValue, r.BytesSinceLast))
 	}
 
