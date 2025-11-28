@@ -1,8 +1,7 @@
-package ociutil
+// Package logutil provides logging convenience functions.
+package logutil
 
 import (
-	"bytes"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -18,43 +17,29 @@ import (
 
 var requestNumber atomic.Int64
 
-// loggingTransport logs to the request's context.
+// LoggingTransport logs to the request's context.
 // The output can be processed by jq to format it nicely.
-type loggingTransport struct {
+type LoggingTransport struct {
 	Base http.RoundTripper
 }
 
 // RoundTrip logs http requests and reponses while redacting sensistive information.
-func (s *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (s *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	log := logger.V(logger.FromContext(ctx).WithGroup("http").With("requestID", requestNumber.Add(1)), 8)
-	const maxSize = 10 * 1024 // * 2 , the body is "drained" by us then go
 	var err error
 
 	// TODO: We can avoid double storing the body in memory if we add our own DumpRequestOut. For now,
 	// 20KiB is acceptable.
 	enabled := log.Enabled(ctx, slog.LevelInfo) // true if verbosity = 16
 	if enabled {
-		if req.ContentLength < maxSize {
-			// here, we're doubling up on the in-memory storage of the body
-			// this format is the same as what's used within DumpRequestOut
-			var save io.ReadCloser
-			save, req.Body, err = drainBody(req.Body)
-			if err != nil {
-				return nil, err
-			}
-			// MUST set before clone
-			req.GetBody = func() (io.ReadCloser, error) { return save, nil }
-		}
-
 		req := req.Clone(ctx)
 		// redact the URL credentials and query string (S3 signed URLs have credentials there)
 		req.URL.User = nil
 		req.URL.RawQuery = ""
-
 		redactHTTPHeaders(req.Header)
 
-		reqBytes, err := httputil.DumpRequestOut(req, req.ContentLength < maxSize)
+		reqBytes, err := httputil.DumpRequestOut(req, false)
 		if err != nil {
 			log.ErrorContext(ctx, "Failed to dump the HTTP request", "error", err.Error())
 		} else {
@@ -117,26 +102,4 @@ func redactURL(rawURL string) string {
 	u.User = nil
 	u.RawQuery = ""
 	return u.String()
-}
-
-// drainBody reads all of b to memory and then returns two equivalent
-// ReadClosers yielding the same bytes.
-//
-// It returns an error if the initial slurp of all bytes fails. It does not attempt
-// to make the returned ReadClosers have identical error-matching behavior.
-//
-// Source (direct copy of): https://github.com/golang/go/blob/master/src/net/http/httputil/dump.go#L25
-func drainBody(b io.ReadCloser) (r1, r2 io.ReadCloser, err error) {
-	if b == nil || b == http.NoBody {
-		// No copying needed. Preserve the magic sentinel meaning of NoBody.
-		return http.NoBody, http.NoBody, nil
-	}
-	var buf bytes.Buffer
-	if _, err = buf.ReadFrom(b); err != nil {
-		return nil, b, err //nolint
-	}
-	if err = b.Close(); err != nil {
-		return nil, b, err
-	}
-	return io.NopCloser(&buf), io.NopCloser(bytes.NewReader(buf.Bytes())), nil
 }
