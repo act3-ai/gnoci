@@ -28,7 +28,7 @@ type ReverseCommunicatorLFS interface {
 	// ReceiveProgressResponse receives an [lfs.ProgressResponse].
 	ReceiveProgressResponse() error
 	// ReceiveTransferResponse receives an [lfs.TransferResponse].
-	ReceiveTransferResponse() error
+	ReceiveTransferResponse(responseTo lfs.Event) error
 	// SendTerminateRequest sends an [lfs.TransferRequest] with event
 	// [lfs.TerminateEvent].
 	SendTerminateRequest() error
@@ -153,13 +153,13 @@ func (g *reverseCommunicatorLFS) ReceiveProgressResponse() error {
 
 	var progressResp *lfs.ProgressResponse
 	if err := json.Unmarshal(line, &progressResp); err != nil {
-		return fmt.Errorf("decoding TransferResponse: %w", err)
+		return fmt.Errorf("decoding ProgressResponse: %w", err)
 	}
 
 	return progressResp.Validate()
 }
 
-func (g *reverseCommunicatorLFS) ReceiveTransferResponse() error {
+func (g *reverseCommunicatorLFS) ReceiveTransferResponse(responseTo lfs.Event) error {
 	line, err := g.readLine()
 	if err != nil {
 		return err
@@ -170,12 +170,8 @@ func (g *reverseCommunicatorLFS) ReceiveTransferResponse() error {
 		return fmt.Errorf("decoding TransferResponse: %w", err)
 	}
 
-	if transferResp.Path == "" {
-		return fmt.Errorf("no path provided in TransferResponse")
-	}
-
-	if transferResp.Oid == "" {
-		return fmt.Errorf("no oid provided in TransferResponse")
+	if err := transferResp.Validate(responseTo); err != nil {
+		return err
 	}
 
 	if transferResp.Error.Message != "" {

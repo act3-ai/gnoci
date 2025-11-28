@@ -141,6 +141,7 @@ func (c *defaultCommunicator) WriteProgress(ctx context.Context, oid string, soF
 		BytesSinceLast: sinceLast,
 	}
 
+	// sanity
 	if err := progressResp.Validate(); err != nil {
 		return err
 	}

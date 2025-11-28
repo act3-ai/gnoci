@@ -340,11 +340,11 @@ func Test_reverseCommunicatorLFS_ReceiveTransferResponse(t *testing.T) {
 		_, err = in.Write(withNewline(raw))
 		assert.NoError(t, err)
 
-		err = revcomm.ReceiveTransferResponse()
+		err = revcomm.ReceiveTransferResponse(lfs.DownloadEvent)
 		assert.NoError(t, err)
 	})
 
-	t.Run("Missing Path", func(t *testing.T) {
+	t.Run("Missing Path - Download", func(t *testing.T) {
 		// this test intentionally does not use a comms.Communicator, incase
 		// bugs are introduced.
 		in := new(bytes.Buffer)
@@ -362,8 +362,30 @@ func Test_reverseCommunicatorLFS_ReceiveTransferResponse(t *testing.T) {
 		_, err = in.Write(withNewline(raw))
 		assert.NoError(t, err)
 
-		err = revcomm.ReceiveTransferResponse()
+		err = revcomm.ReceiveTransferResponse(lfs.DownloadEvent)
 		assert.Error(t, err)
+	})
+
+	t.Run("Missing Path - Upload", func(t *testing.T) {
+		// this test intentionally does not use a comms.Communicator, incase
+		// bugs are introduced.
+		in := new(bytes.Buffer)
+		revcomm := NewReverseCommunicatorLFS(in, nil)
+
+		req := &lfs.TransferResponse{
+			Event: lfs.CompleteEvent,
+			Oid:   "123456789",
+			Path:  "",
+		}
+
+		raw, err := json.Marshal(req)
+		assert.NoError(t, err)
+
+		_, err = in.Write(withNewline(raw))
+		assert.NoError(t, err)
+
+		err = revcomm.ReceiveTransferResponse(lfs.UploadEvent)
+		assert.NoError(t, err)
 	})
 
 	t.Run("Missing Oid", func(t *testing.T) {
@@ -384,7 +406,7 @@ func Test_reverseCommunicatorLFS_ReceiveTransferResponse(t *testing.T) {
 		_, err = in.Write(withNewline(raw))
 		assert.NoError(t, err)
 
-		err = revcomm.ReceiveTransferResponse()
+		err = revcomm.ReceiveTransferResponse(lfs.DownloadEvent)
 		assert.Error(t, err)
 	})
 
@@ -410,7 +432,7 @@ func Test_reverseCommunicatorLFS_ReceiveTransferResponse(t *testing.T) {
 		_, err = in.Write(withNewline(raw))
 		assert.NoError(t, err)
 
-		err = revcomm.ReceiveTransferResponse()
+		err = revcomm.ReceiveTransferResponse(lfs.DownloadEvent)
 		assert.Error(t, err)
 	})
 }
