@@ -19,8 +19,11 @@ var (
 	ErrEmptyOID = errors.New("no oid specified")
 	// ErrEmptyPath indicates missing filepath information.
 	ErrEmptyPath = errors.New("no path specified")
-	// ErrInvalidSize indicates invalid file size information.
+	// ErrInvalidSize indicates invalid file size value.
 	ErrInvalidSize = errors.New("invalid file size")
+	// ErrInvalidProgressValue indicates invalid progress BytesSoFar
+	// or BytesSinceLast values.
+	ErrInvalidProgressValue = errors.New("invalid progress value")
 )
 
 // Event describes the type of request made by git-lfs.
@@ -190,9 +193,27 @@ type ProgressResponse struct {
 	BytesSinceLast int    `json:"bytesSinceLast"`
 }
 
-// FinishRequest is received from git-lfs, indicating no other requests will be made.
-type FinishRequest struct {
-	Event Event `json:"event"` // always [TerminateEvent]
+// Validate ensures sufficient information for processing an [ProgressResponse].
+func (r *ProgressResponse) Validate() error {
+	var errs []error
+
+	if r.Event != ProgessEvent {
+		errs = append(errs, ErrInvalidEvent)
+	}
+
+	if r.Oid == "" {
+		errs = append(errs, ErrEmptyOID)
+	}
+
+	if r.BytesSoFar < 0 {
+		errs = append(errs, fmt.Errorf("%w: got BytesSoFar = %d", ErrInvalidProgressValue, r.BytesSoFar))
+	}
+
+	if r.BytesSoFar < 0 {
+		errs = append(errs, fmt.Errorf("%w: got BytesSinceLast = %d", ErrInvalidProgressValue, r.BytesSinceLast))
+	}
+
+	return errors.Join(errs...)
 }
 
 // ErrCodeMessage is included in a [InitResponse] or [TransferResponse] to indicate

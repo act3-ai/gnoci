@@ -99,8 +99,7 @@ func (c *defaultCommunicator) ReceiveTransferRequest(ctx context.Context) (*lfs.
 // WriteInitResponse responds to a [lfs.TransferRequest].
 // Returns err joined with any response handling errors.
 func (c *defaultCommunicator) WriteInitResponse(ctx context.Context, initErr error) error {
-	slog.DebugContext(ctx, "writing InitResponse to git-lfs",
-		slog.String("initErr", initErr.Error()))
+	slog.DebugContext(ctx, "writing InitResponse to git-lfs")
 
 	// TODO: is this necessary or can we marshal with an empty error?
 	// TODO: test addition of "omitempty"
@@ -141,6 +140,10 @@ func (c *defaultCommunicator) WriteProgress(ctx context.Context, event lfs.Event
 		Oid:            oid,
 		BytesSoFar:     soFar,
 		BytesSinceLast: sinceLast,
+	}
+
+	if err := progressResp.Validate(); err != nil {
+		return err
 	}
 
 	raw, err := json.Marshal(progressResp)

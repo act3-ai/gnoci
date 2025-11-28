@@ -3,7 +3,6 @@ package testutils
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 
@@ -12,6 +11,9 @@ import (
 
 // ReverseCommunicatorLFS is the reverse of lfs [comms.Communicator], acting as git-lfs
 // sending custom transfer protocol requests and receiving responses.
+//
+// In addition to regular errors, methods return errors if the underlying message
+// contains an error.
 type ReverseCommunicatorLFS interface {
 	// SendInitRequest sends an [lfs.InitRequest].
 	SendInitRequest(op lfs.Operation, remote string) error
@@ -154,15 +156,7 @@ func (g *reverseCommunicatorLFS) ReceiveProgressResponse() error {
 		return fmt.Errorf("decoding TransferResponse: %w", err)
 	}
 
-	msgErrs := make([]error, 0)
-	if progressResp.Event != lfs.ProgessEvent {
-		msgErrs = append(msgErrs, fmt.Errorf("invalid progress event type %s, expected %s", progressResp.Event, lfs.ProgessEvent))
-	}
-	if progressResp.Oid == "" {
-		msgErrs = append(msgErrs, fmt.Errorf("received empty progress oid"))
-	}
-
-	return errors.Join(msgErrs...)
+	return progressResp.Validate()
 }
 
 func (g *reverseCommunicatorLFS) ReceiveTransferResponse() error {
