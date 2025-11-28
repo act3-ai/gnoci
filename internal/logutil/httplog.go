@@ -1,4 +1,5 @@
-package ociutil
+// Package logutil provides logging convenience functions.
+package logutil
 
 import (
 	"bytes"
@@ -18,14 +19,14 @@ import (
 
 var requestNumber atomic.Int64
 
-// loggingTransport logs to the request's context.
+// LoggingTransport logs to the request's context.
 // The output can be processed by jq to format it nicely.
-type loggingTransport struct {
+type LoggingTransport struct {
 	Base http.RoundTripper
 }
 
 // RoundTrip logs http requests and reponses while redacting sensistive information.
-func (s *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (s *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	log := logger.V(logger.FromContext(ctx).WithGroup("http").With("requestID", requestNumber.Add(1)), 8)
 	const maxSize = 10 * 1024 // * 2 , the body is "drained" by us then go

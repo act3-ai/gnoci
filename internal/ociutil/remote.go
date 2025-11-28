@@ -24,6 +24,8 @@ import (
 	"oras.land/oras-go/v2/registry/remote/auth"
 	"oras.land/oras-go/v2/registry/remote/credentials"
 	"oras.land/oras-go/v2/registry/remote/retry"
+
+	"github.com/act3-ai/gnoci/internal/logutil"
 )
 
 // This file is a modification of the contents of https://github.com/act3-ai/data-tool/blob/v1.16.1/internal/registry/registry.go
@@ -173,7 +175,7 @@ func newHTTPClientWithOps(hostName, customCertPath string) (*http.Client, error)
 	}
 
 	// log requests to the logger (if verbosity is high enough)
-	lt := &loggingTransport{
+	lt := &logutil.LoggingTransport{
 		Base: defaultTransport,
 	}
 
