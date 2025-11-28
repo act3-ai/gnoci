@@ -161,7 +161,7 @@ func (c *defaultCommunicator) WriteProgress(ctx context.Context, oid string, soF
 // WriteTransferUploadResponse is the final response to an [lfs.TransferRequest],
 // with event type [lfs.UploadEvent] after zero or more
 // [ResponseHandler.WriteProgress] messages.
-func (c *defaultCommunicator) WriteTransferUploadResponse(ctx context.Context, oid string, err error) error {
+func (c *defaultCommunicator) WriteTransferUploadResponse(ctx context.Context, oid string, uploadErr error) error {
 	log := slog.With(slog.String("oid", oid))
 	log.DebugContext(ctx, "writing transfer response")
 
@@ -169,34 +169,33 @@ func (c *defaultCommunicator) WriteTransferUploadResponse(ctx context.Context, o
 		Event: lfs.CompleteEvent,
 		Oid:   oid,
 	}
-	if err != nil {
+	if uploadErr != nil {
 		transferResp.Error = lfs.ErrCodeMessage{
 			Code:    1,
-			Message: err.Error(),
+			Message: uploadErr.Error(),
 		}
 	}
 
 	if err := transferResp.Validate(lfs.UploadEvent); err != nil {
-		return err
+		return errors.Join(uploadErr, err)
 	}
 
 	raw, err := json.Marshal(transferResp)
 	if err != nil {
-		return fmt.Errorf("encoding transfer response: %w", err)
+		return errors.Join(uploadErr, fmt.Errorf("encoding transfer response: %w", err))
 	}
 
 	if _, err := c.out.Write(withNewline(raw)); err != nil {
-		log.ErrorContext(ctx, "writing transfer response", slog.String("error", err.Error()))
-		return fmt.Errorf("writing transfer response: %w", err)
+		return errors.Join(uploadErr, fmt.Errorf("writing transfer response: %w", err))
 	}
 
-	return nil
+	return uploadErr
 }
 
 // WriteTransferDownloadResponse is the final response to an
 // [lfs.TransferRequest], with event type [lfs.DownloadEvent] after zero or more
 // [ResponseHandler.WriteProgress] messages.
-func (c *defaultCommunicator) WriteTransferDownloadResponse(ctx context.Context, oid string, path string, err error) error {
+func (c *defaultCommunicator) WriteTransferDownloadResponse(ctx context.Context, oid string, path string, downloadErr error) error {
 	log := slog.With(slog.String("oid", oid))
 	log.DebugContext(ctx, "writing transfer response")
 
@@ -205,28 +204,27 @@ func (c *defaultCommunicator) WriteTransferDownloadResponse(ctx context.Context,
 		Path:  path,
 		Oid:   oid,
 	}
-	if err != nil {
+	if downloadErr != nil {
 		transferResp.Error = lfs.ErrCodeMessage{
 			Code:    1,
-			Message: err.Error(),
+			Message: downloadErr.Error(),
 		}
 	}
 
 	if err := transferResp.Validate(lfs.DownloadEvent); err != nil {
-		return err
+		return errors.Join(downloadErr, err)
 	}
 
 	raw, err := json.Marshal(transferResp)
 	if err != nil {
-		return fmt.Errorf("encoding transfer response: %w", err)
+		return errors.Join(downloadErr, fmt.Errorf("encoding transfer response: %w", err))
 	}
 
 	if _, err := c.out.Write(withNewline(raw)); err != nil {
-		log.ErrorContext(ctx, "writing transfer response", slog.String("error", err.Error()))
-		return fmt.Errorf("writing transfer response: %w", err)
+		return errors.Join(downloadErr, fmt.Errorf("writing transfer response: %w", err))
 	}
 
-	return nil
+	return downloadErr
 }
 
 func (c *defaultCommunicator) readLine() ([]byte, error) {
