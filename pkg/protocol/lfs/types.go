@@ -155,8 +155,27 @@ func (r *TransferRequest) Validate() error {
 type TransferResponse struct {
 	Event Event          `json:"event"`
 	Oid   string         `json:"oid"`
-	Path  string         `json:"path,omitempty"`
+	Path  string         `json:"path,omitempty"` // only included as a response to [DownloadEvent]
 	Error ErrCodeMessage `json:"error,omitempty"`
+}
+
+// Validate ensures sufficient information for processing an [TransferRequest].
+func (r *TransferResponse) Validate(responseTo Event) error {
+	var errs []error
+
+	if r.Event != CompleteEvent {
+		errs = append(errs, fmt.Errorf("%w: got %s", ErrInvalidEvent, r.Event))
+	}
+
+	if r.Oid == "" {
+		errs = append(errs, ErrEmptyOID)
+	}
+
+	if responseTo == DownloadEvent && r.Path == "" {
+		errs = append(errs, ErrEmptyPath)
+	}
+
+	return errors.Join(errs...)
 }
 
 // ProgressResponse is sent periodically while processing a [TransferRequest].

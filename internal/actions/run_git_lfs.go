@@ -172,8 +172,8 @@ func (action *GitLFS) runDownload(ctx context.Context, remote model.ReadOnlyLFSM
 			// git-lfs did not adhere to it's own protocol
 			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.DownloadEvent)
 		default:
-			err := action.downloadLFSLayer(ctx, transferReq, remote)
-			err = action.comm.WriteTransferResponse(ctx, transferReq.Oid, transferReq.Path, err)
+			path, err := action.downloadLFSLayer(ctx, transferReq, remote)
+			err = action.comm.WriteTransferDownloadResponse(ctx, transferReq.Oid, path, err)
 			if err != nil {
 				return fmt.Errorf("writing transfer response: %w", err)
 			}
@@ -181,13 +181,13 @@ func (action *GitLFS) runDownload(ctx context.Context, remote model.ReadOnlyLFSM
 	}
 }
 
-func (action *GitLFS) downloadLFSLayer(ctx context.Context, transferReq *lfs.TransferRequest, remote model.ReadOnlyLFSModeler) error {
+func (action *GitLFS) downloadLFSLayer(ctx context.Context, transferReq *lfs.TransferRequest, remote model.ReadOnlyLFSModeler) (string, error) {
 	pChan := make(chan progress.Progress)
 	done := make(chan struct{})
 	go func() {
 		for pUpdate := range pChan {
 			err := action.comm.WriteProgress(ctx,
-				lfs.UploadEvent,
+				lfs.DownloadEvent,
 				transferReq.Oid,
 				pUpdate.Total,
 				pUpdate.Delta)
@@ -208,14 +208,14 @@ func (action *GitLFS) downloadLFSLayer(ctx context.Context, transferReq *lfs.Tra
 	// TODO: convenient that LFS uses sha256 by default, but are other digest methods out there?
 	rc, err := remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid), fetchOpts)
 	if err != nil {
-		return fmt.Errorf("fetching LFS file: %w", err)
+		return "", fmt.Errorf("fetching LFS file: %w", err)
 	}
 	defer rc.Close()
 
 	tmpFilePath := filepath.Join(action.lfsStore, transferReq.Oid)
 	f, err := os.OpenFile(tmpFilePath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
-		return fmt.Errorf("opening LFS temp file: %w", err)
+		return "", fmt.Errorf("opening LFS temp file: %w", err)
 	}
 	defer f.Close()
 
@@ -223,12 +223,12 @@ func (action *GitLFS) downloadLFSLayer(ctx context.Context, transferReq *lfs.Tra
 	<-done
 	switch {
 	case err != nil:
-		return fmt.Errorf("copying LFS temp file: %w", err)
+		return "", fmt.Errorf("copying LFS temp file: %w", err)
 	case n != transferReq.Size:
 		// TODO: double check protocol spec, LFS may handle this validation for us
-		return fmt.Errorf("unexpected LFS file size, expected %d, got %d", transferReq.Size, n)
+		return "", fmt.Errorf("unexpected LFS file size, expected %d, got %d", transferReq.Size, n)
 	default:
-		return nil
+		return tmpFilePath, nil
 	}
 }
 
@@ -255,7 +255,7 @@ func (action *GitLFS) runUpload(ctx context.Context, subject ocispec.Descriptor,
 			return fmt.Errorf("unexpected event %s, expected %s", transferReq.Event, lfs.UploadEvent)
 		default:
 			err := action.uploadLFSLayer(ctx, transferReq, remote)
-			err = action.comm.WriteTransferResponse(ctx, transferReq.Oid, "", err)
+			err = action.comm.WriteTransferUploadResponse(ctx, transferReq.Oid, err)
 			if err != nil {
 				return fmt.Errorf("writing transfer response: %w", err)
 			}
@@ -282,7 +282,7 @@ func (action *GitLFS) uploadLFSLayer(ctx context.Context, transferReq *lfs.Trans
 		},
 	}
 	if _, err := remote.PushLFSFile(ctx, transferReq.Path, pushOpts); err != nil {
-		err := action.comm.WriteTransferResponse(ctx, transferReq.Oid, transferReq.Path, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
+		err := action.comm.WriteTransferUploadResponse(ctx, transferReq.Oid, fmt.Errorf("preparing git-lfs file for transfer: %w", err))
 		if err != nil {
 			<-done
 			return err

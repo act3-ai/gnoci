@@ -36,9 +36,14 @@ type ResponseHandler interface {
 	// WriteProgress sends a [lfs.ProgressResponse] message, after an
 	// [lfs.TransferRequest], and before an [lfs.TransferResponse].
 	WriteProgress(ctx context.Context, event lfs.Event, oid string, soFar, sinceLast int) error
-	// WriteTransferResponse is the final response to an [lfs.TransferRequest],
-	// after zero or more [ResponseHandler.WriteProgress] messages.
-	WriteTransferResponse(ctx context.Context, oid string, path string, err error) error
+	// WriteTransferUploadResponse is the final response to an [lfs.TransferRequest],
+	// with event type [lfs.UploadEvent] after zero or more
+	// [ResponseHandler.WriteProgress] messages.
+	WriteTransferUploadResponse(ctx context.Context, oid string, err error) error
+	// WriteTransferDownloadResponse is the final response to an
+	// [lfs.TransferRequest], with event type [lfs.DownloadEvent] after zero or more
+	// [ResponseHandler.WriteProgress] messages.
+	WriteTransferDownloadResponse(ctx context.Context, oid string, path string, err error) error
 }
 
 // NewCommunicator initializes a [Communicator].
@@ -150,9 +155,45 @@ func (c *defaultCommunicator) WriteProgress(ctx context.Context, event lfs.Event
 	return nil
 }
 
-// WriteTransferResponse is the final response to an [lfs.TransferRequest],
-// after zero or more [ResponseHandler.WriteProgress] messages.
-func (c *defaultCommunicator) WriteTransferResponse(ctx context.Context, oid string, path string, err error) error {
+// WriteTransferUploadResponse is the final response to an [lfs.TransferRequest],
+// with event type [lfs.UploadEvent] after zero or more
+// [ResponseHandler.WriteProgress] messages.
+func (c *defaultCommunicator) WriteTransferUploadResponse(ctx context.Context, oid string, err error) error {
+	log := slog.With(slog.String("oid", oid))
+	log.DebugContext(ctx, "writing transfer response")
+
+	transferResp := lfs.TransferResponse{
+		Event: lfs.CompleteEvent,
+		Oid:   oid,
+	}
+	if err != nil {
+		transferResp.Error = lfs.ErrCodeMessage{
+			Code:    1,
+			Message: err.Error(),
+		}
+	}
+
+	if err := transferResp.Validate(lfs.UploadEvent); err != nil {
+		return err
+	}
+
+	raw, err := json.Marshal(transferResp)
+	if err != nil {
+		return fmt.Errorf("encoding transfer response: %w", err)
+	}
+
+	if _, err := c.out.Write(withNewline(raw)); err != nil {
+		log.ErrorContext(ctx, "writing transfer response", slog.String("error", err.Error()))
+		return fmt.Errorf("writing transfer response: %w", err)
+	}
+
+	return nil
+}
+
+// WriteTransferDownloadResponse is the final response to an
+// [lfs.TransferRequest], with event type [lfs.DownloadEvent] after zero or more
+// [ResponseHandler.WriteProgress] messages.
+func (c *defaultCommunicator) WriteTransferDownloadResponse(ctx context.Context, oid string, path string, err error) error {
 	log := slog.With(slog.String("oid", oid))
 	log.DebugContext(ctx, "writing transfer response")
 
@@ -162,10 +203,14 @@ func (c *defaultCommunicator) WriteTransferResponse(ctx context.Context, oid str
 		Oid:   oid,
 	}
 	if err != nil {
-		transferResp.Error = &lfs.ErrCodeMessage{
+		transferResp.Error = lfs.ErrCodeMessage{
 			Code:    1,
 			Message: err.Error(),
 		}
+	}
+
+	if err := transferResp.Validate(lfs.DownloadEvent); err != nil {
+		return err
 	}
 
 	raw, err := json.Marshal(transferResp)
