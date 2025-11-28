@@ -95,21 +95,15 @@ func (g *reverseCommunicatorLFS) ReceiveInitResponse() error {
 }
 
 func (g *reverseCommunicatorLFS) SendTransferUploadRequest(oid string, size int64, path string) error {
-	if oid == "" {
-		return fmt.Errorf("empty oid")
-	}
-	if size < 1 {
-		return fmt.Errorf("invalid oid size %d, expected > 0", size)
-	}
-	if path == "" {
-		return fmt.Errorf("empty path")
-	}
-
 	req := &lfs.TransferRequest{
 		Event: lfs.UploadEvent,
 		Oid:   oid,
 		Size:  size,
 		Path:  path,
+	}
+
+	if err := req.Validate(); err != nil {
+		return err
 	}
 
 	reqRaw, err := json.Marshal(req)
@@ -126,17 +120,14 @@ func (g *reverseCommunicatorLFS) SendTransferUploadRequest(oid string, size int6
 }
 
 func (g *reverseCommunicatorLFS) SendTransferDownloadRequest(oid string, size int64) error {
-	if oid == "" {
-		return fmt.Errorf("empty oid")
-	}
-	if size < 1 {
-		return fmt.Errorf("invalid oid size %d, expected > 0", size)
-	}
-
 	req := &lfs.TransferRequest{
 		Event: lfs.DownloadEvent,
 		Oid:   oid,
 		Size:  size,
+	}
+
+	if err := req.Validate(); err != nil {
+		return err
 	}
 
 	reqRaw, err := json.Marshal(req)
@@ -193,7 +184,7 @@ func (g *reverseCommunicatorLFS) ReceiveTransferResponse() error {
 		return fmt.Errorf("no oid provided in TransferResponse")
 	}
 
-	if transferResp.Error != nil && transferResp.Error.Message != "" {
+	if transferResp.Error.Message != "" {
 		return fmt.Errorf("received TransferResponse error: code = %d, message = %s", transferResp.Error.Code, transferResp.Error.Message)
 	}
 

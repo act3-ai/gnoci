@@ -11,8 +11,16 @@ import (
 var (
 	// ErrInvalidOperation indicates an operation is not supported or is unexpected.
 	ErrInvalidOperation = errors.New("invalid operation")
+	// ErrInvalidEvent indicates an event is invalid for the request/response type.
+	ErrInvalidEvent = errors.New("invalid event type")
 	// ErrNoRemote indicates missing remote URL information.
 	ErrNoRemote = errors.New("no remote specified")
+	// ErrEmptyOID indicates missing object ID information.
+	ErrEmptyOID = errors.New("no oid specified")
+	// ErrEmptyPath indicates missing filepath information.
+	ErrEmptyPath = errors.New("no path specified")
+	// ErrInvalidSize indicates invalid file size information.
+	ErrInvalidSize = errors.New("invalid file size")
 )
 
 // Event describes the type of request made by git-lfs.
@@ -103,6 +111,29 @@ type TransferRequest struct {
 	// Action *Action `json:"action"`
 }
 
+// Validate ensures sufficient information for processing an [TransferRequest].
+func (r *TransferRequest) Validate() error {
+	var errs []error
+
+	if r.Event != DownloadEvent && r.Event != UploadEvent {
+		errs = append(errs, fmt.Errorf("%w: got %s", ErrInvalidEvent, r.Event))
+	}
+
+	if r.Oid == "" {
+		errs = append(errs, ErrEmptyOID)
+	}
+
+	if r.Size < 1 {
+		errs = append(errs, ErrInvalidSize)
+	}
+
+	if r.Event == UploadEvent && r.Path == "" {
+		errs = append(errs, ErrEmptyPath)
+	}
+
+	return errors.Join(errs...)
+}
+
 // type Action struct {
 // 	Href      string            `json:"href"`
 // 	Header    map[string]string `json:"header,omitempty"`
@@ -122,10 +153,10 @@ type TransferRequest struct {
 //
 // - https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#downloads
 type TransferResponse struct {
-	Event Event           `json:"event"`
-	Oid   string          `json:"oid"`
-	Path  string          `json:"path,omitempty"`
-	Error *ErrCodeMessage `json:"error,omitempty"`
+	Event Event          `json:"event"`
+	Oid   string         `json:"oid"`
+	Path  string         `json:"path,omitempty"`
+	Error ErrCodeMessage `json:"error,omitempty"`
 }
 
 // ProgressResponse is sent periodically while processing a [TransferRequest].

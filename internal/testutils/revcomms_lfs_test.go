@@ -135,6 +135,10 @@ func Test_reverseCommunicatorLFS_SendTransferUploadRequest(t *testing.T) {
 		err = json.Unmarshal(outRaw, &req)
 		assert.NoError(t, err)
 
+		// validate is not sufficient by itself
+		err = req.Validate()
+		assert.NoError(t, err)
+
 		assert.Equal(t, lfs.UploadEvent, req.Event)
 		assert.Equal(t, oid, req.Oid)
 		assert.Equal(t, size, req.Size)
@@ -153,7 +157,7 @@ func Test_reverseCommunicatorLFS_SendTransferUploadRequest(t *testing.T) {
 		)
 
 		err := revcomm.SendTransferUploadRequest(oid, size, path)
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, lfs.ErrEmptyOID)
 	})
 
 	t.Run("Invalid Size", func(t *testing.T) {
@@ -168,7 +172,7 @@ func Test_reverseCommunicatorLFS_SendTransferUploadRequest(t *testing.T) {
 		)
 
 		err := revcomm.SendTransferUploadRequest(oid, size, path)
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, lfs.ErrInvalidSize)
 	})
 
 	t.Run("Missing Path", func(t *testing.T) {
@@ -183,7 +187,7 @@ func Test_reverseCommunicatorLFS_SendTransferUploadRequest(t *testing.T) {
 		)
 
 		err := revcomm.SendTransferUploadRequest(oid, size, path)
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, lfs.ErrEmptyPath)
 	})
 }
 
@@ -208,6 +212,10 @@ func Test_reverseCommunicatorLFS_SendTransferDownloadRequest(t *testing.T) {
 		err = json.Unmarshal(outRaw, &req)
 		assert.NoError(t, err)
 
+		// validate is not sufficient by itself
+		err = req.Validate()
+		assert.NoError(t, err)
+
 		assert.Equal(t, lfs.DownloadEvent, req.Event)
 		assert.Equal(t, oid, req.Oid)
 		assert.Equal(t, size, req.Size)
@@ -224,7 +232,7 @@ func Test_reverseCommunicatorLFS_SendTransferDownloadRequest(t *testing.T) {
 		)
 
 		err := revcomm.SendTransferDownloadRequest(oid, size)
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, lfs.ErrEmptyOID)
 	})
 
 	t.Run("Invalid Size", func(t *testing.T) {
@@ -238,7 +246,7 @@ func Test_reverseCommunicatorLFS_SendTransferDownloadRequest(t *testing.T) {
 		)
 
 		err := revcomm.SendTransferDownloadRequest(oid, size)
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, lfs.ErrInvalidSize)
 	})
 }
 
@@ -390,7 +398,7 @@ func Test_reverseCommunicatorLFS_ReceiveTransferResponse(t *testing.T) {
 			Event: lfs.CompleteEvent,
 			Oid:   "123456789",
 			Path:  "path/foo",
-			Error: &lfs.ErrCodeMessage{
+			Error: lfs.ErrCodeMessage{
 				Code:    1,
 				Message: errors.New("transfer error").Error(),
 			},
