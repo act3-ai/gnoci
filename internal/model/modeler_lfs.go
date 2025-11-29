@@ -82,6 +82,21 @@ func (m *model) FetchLFS(ctx context.Context) (ocispec.Descriptor, error) {
 	return m.lfsManDesc, nil
 }
 
+func (m *model) FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error) {
+	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
+	manDesc, err := m.FetchLFS(ctx)
+	switch {
+	case errors.Is(err, ErrLFSManifestNotFound):
+		slog.InfoContext(ctx, "remote does not exist, initializing default lfs manifest")
+		m.lfsMan = ocispec.Manifest{}
+		return ocispec.Descriptor{}, nil
+	case err != nil:
+		return ocispec.Descriptor{}, fmt.Errorf("fetching remote metadata: %w", err)
+	default:
+		return manDesc, nil
+	}
+}
+
 // FetchLFSOptions define optional parameters for fetching LFS files.
 type FetchLFSOptions struct {
 	Progress *ProgressOptions
@@ -105,21 +120,6 @@ func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest, opts *Fet
 	return nil, fmt.Errorf("%w: %s", errLayerNotInManifest, dgst.String())
 }
 
-func (m *model) FetchLFSOrDefault(ctx context.Context) (ocispec.Descriptor, error) {
-	slog.DebugContext(ctx, "fetching LFS manifest or defaulting")
-	manDesc, err := m.FetchLFS(ctx)
-	switch {
-	case errors.Is(err, ErrLFSManifestNotFound):
-		slog.InfoContext(ctx, "remote does not exist, initializing default lfs manifest")
-		m.lfsMan = ocispec.Manifest{}
-		return ocispec.Descriptor{}, nil
-	case err != nil:
-		return ocispec.Descriptor{}, fmt.Errorf("fetching remote metadata: %w", err)
-	default:
-		return manDesc, nil
-	}
-}
-
 func (m *model) PushLFSManifest(ctx context.Context, subject ocispec.Descriptor) (ocispec.Descriptor, error) {
 	slog.DebugContext(ctx, "pushing LFS data model")
 
@@ -128,12 +128,12 @@ func (m *model) PushLFSManifest(ctx context.Context, subject ocispec.Descriptor)
 		// TODO: We don't care it's this struct, only that we have access to Delete
 		r, ok := m.gt.(*remote.Repository)
 		if !ok {
-			return ocispec.Descriptor{}, fmt.Errorf("graph target is not a remote repository")
-		}
-
-		// remove old referrer
-		if err := r.Delete(ctx, m.lfsManDesc); err != nil && !errors.Is(err, errdef.ErrNotFound) {
-			return ocispec.Descriptor{}, fmt.Errorf("deleting old LFS referrer manifest: %w", err)
+			slog.WarnContext(ctx, "graph target is not a remote repository")
+		} else {
+			// remove old referrer
+			if err := r.Delete(ctx, m.lfsManDesc); err != nil && !errors.Is(err, errdef.ErrNotFound) {
+				return ocispec.Descriptor{}, fmt.Errorf("deleting old LFS referrer manifest: %w", err)
+			}
 		}
 	}
 
@@ -185,9 +185,7 @@ func (m *model) PushLFSFile(ctx context.Context, path string, opts *PushLFSOptio
 
 	// stay idempotent if the same LFS file is added multiple times.
 	for _, desc := range m.lfsMan.Layers {
-		// HACK: this check smells bad, but LFS should be providing us with
-		// the actual LFS file in .git/*
-		if desc.Digest.Encoded() == filepath.Base(path) {
+		if desc.Digest.Encoded() == newDesc.Digest.Encoded() {
 			// unlikely hash collision?
 			if desc.Size != newDesc.Size {
 				return ocispec.Descriptor{}, fmt.Errorf("found an existing LFS object digest with different size: digest = %s, existing file size = %d, got file size = %d", desc.Digest, desc.Size, newDesc.Size)

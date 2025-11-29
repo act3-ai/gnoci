@@ -32,9 +32,11 @@ var testRemote = registry.Reference{
 
 // setupRemote pushes a Git OCI artifact, returning anything needed for validation
 func setupRemote(t *testing.T, gt oras.GraphTarget) (ocispec.Manifest, oci.ConfigGit) {
+	// We intentionally don't use [oras.PackManifest] in case of upstream bugs,
+	// although they're quite stable so perhaps we're unnecessarily cautious
 	t.Helper()
 
-	// layer metadata, we don't care about the contents here
+	// https://en.wikipedia.org/wiki/Gnocchi
 	layer := []byte("Gnocchi are a varied family of pasta-like dumplings in Italian cuisine.")
 	layerDgst := digest.FromBytes(layer)
 
@@ -113,9 +115,7 @@ func TestNewModeler(t *testing.T) {
 	gt := memory.New()
 
 	fstore, err := file.New(t.TempDir())
-	if err != nil {
-		t.Errorf("initializing OCI filestore: %v", err)
-	}
+	assert.NoError(t, err)
 	defer func() {
 		if err := fstore.Close(); err != nil {
 			t.Errorf("closing OCI filestore: %v", err)
@@ -126,8 +126,9 @@ func TestNewModeler(t *testing.T) {
 
 	model := got.(*model)
 
-	assert.NotNil(t, model.gt)
-	assert.NotNil(t, model.fstore)
+	assert.Equal(t, testRemote, model.ref)
+	assert.Equal(t, fstore, model.fstore)
+	assert.Equal(t, gt, model.gt)
 }
 
 func Test_model_Fetch(t *testing.T) {

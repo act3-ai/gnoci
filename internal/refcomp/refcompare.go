@@ -11,7 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/act3-ai/gnoci/internal/git"
-	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/internal/model"
 )
 
 // Status represents the result of a reference comparison.

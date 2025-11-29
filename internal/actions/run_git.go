@@ -15,8 +15,8 @@ import (
 
 	"github.com/act3-ai/gnoci/internal/cmd"
 	"github.com/act3-ai/gnoci/internal/git"
+	"github.com/act3-ai/gnoci/internal/model"
 	"github.com/act3-ai/gnoci/internal/ociutil"
-	"github.com/act3-ai/gnoci/internal/ociutil/model"
 	"github.com/act3-ai/gnoci/pkg/apis"
 	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
 	"github.com/act3-ai/go-common/pkg/config"
