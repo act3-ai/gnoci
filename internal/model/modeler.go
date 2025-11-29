@@ -98,7 +98,7 @@ type model struct {
 	gt     oras.GraphTarget
 	fstore *file.Store
 
-	// populated on fetch
+	// populated on [model.Fetch]
 	fetched     bool
 	manDesc     ocispec.Descriptor
 	man         ocispec.Manifest
@@ -106,6 +106,7 @@ type model struct {
 	refsByLayer map[digest.Digest][]plumbing.Hash
 	newPacks    []ocispec.Descriptor
 
+	// populated on [model.FetchLFS]
 	lfsMan     ocispec.Manifest
 	lfsManDesc ocispec.Descriptor
 }
