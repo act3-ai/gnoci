@@ -9,7 +9,7 @@ import (
 	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/go-git/go-git/v5/plumbing"
 
-	"github.com/act3-ai/gnoci/internal/ociutil/model"
+	"github.com/act3-ai/gnoci/internal/model"
 )
 
 // HandleList executes the list command. Lists refs one per line.
