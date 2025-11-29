@@ -37,10 +37,6 @@ type Registry struct {
 
 // ConfigurationDefault defaults the fields in [Configuration].
 func ConfigurationDefault(obj *Configuration) {
-	if obj == nil {
-		obj = &Configuration{}
-	}
-
 	// Default the TypeMeta
 	obj.APIVersion = GroupVersion.String()
 	obj.Kind = "Configuration"
