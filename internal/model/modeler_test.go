@@ -113,9 +113,7 @@ func TestNewModeler(t *testing.T) {
 	gt := memory.New()
 
 	fstore, err := file.New(t.TempDir())
-	if err != nil {
-		t.Errorf("initializing OCI filestore: %v", err)
-	}
+	assert.NoError(t, err)
 	defer func() {
 		if err := fstore.Close(); err != nil {
 			t.Errorf("closing OCI filestore: %v", err)
@@ -126,8 +124,9 @@ func TestNewModeler(t *testing.T) {
 
 	model := got.(*model)
 
-	assert.NotNil(t, model.gt)
-	assert.NotNil(t, model.fstore)
+	assert.Equal(t, testRemote, model.ref)
+	assert.Equal(t, fstore, model.fstore)
+	assert.Equal(t, gt, model.gt)
 }
 
 func Test_model_Fetch(t *testing.T) {
