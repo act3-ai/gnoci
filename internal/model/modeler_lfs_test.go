@@ -2,12 +2,10 @@ package model
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -22,7 +20,6 @@ import (
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/content/memory"
-	"oras.land/oras-go/v2/registry"
 )
 
 // returns git manifest, git config, lfs manifest
@@ -514,59 +511,6 @@ func Test_model_PushLFSFile(t *testing.T) {
 		assert.Equal(t, 1, len(m.lfsMan.Layers))
 
 	})
-}
-
-func Test_model_referrer(t *testing.T) {
-	type fields struct {
-		ref         registry.Reference
-		gt          oras.GraphTarget
-		fstore      *file.Store
-		fetched     bool
-		manDesc     ocispec.Descriptor
-		man         ocispec.Manifest
-		cfg         oci.ConfigGit
-		refsByLayer map[digest.Digest][]plumbing.Hash
-		newPacks    []ocispec.Descriptor
-		lfsMan      ocispec.Manifest
-		lfsManDesc  ocispec.Descriptor
-	}
-	type args struct {
-		ctx context.Context
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    ocispec.Descriptor
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := &model{
-				ref:         tt.fields.ref,
-				gt:          tt.fields.gt,
-				fstore:      tt.fields.fstore,
-				fetched:     tt.fields.fetched,
-				manDesc:     tt.fields.manDesc,
-				man:         tt.fields.man,
-				cfg:         tt.fields.cfg,
-				refsByLayer: tt.fields.refsByLayer,
-				newPacks:    tt.fields.newPacks,
-				lfsMan:      tt.fields.lfsMan,
-				lfsManDesc:  tt.fields.lfsManDesc,
-			}
-			got, err := m.referrer(tt.args.ctx)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("model.referrer() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("model.referrer() = %v, want %v", got, tt.want)
-			}
-		})
-	}
 }
 
 func Test_progressOrDefault(t *testing.T) {
