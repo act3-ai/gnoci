@@ -10,7 +10,6 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.34.2
 )
 
@@ -53,6 +52,7 @@ require (
 	google.golang.org/protobuf v1.36.7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.34.0 // indirect
 	k8s.io/apiextensions-apiserver v0.34.0 // indirect
 	k8s.io/code-generator v0.34.0 // indirect

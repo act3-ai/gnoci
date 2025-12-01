@@ -21,14 +21,12 @@ func HandleFetch(ctx context.Context, local git.Repository, remote model.ReadOnl
 		return fmt.Errorf("fetching remote metadata: %w", err)
 	}
 
-	// fetchRefs := make([]*plumbing.Reference, 0, len(cmds))
 	packLayers := make(map[digest.Digest]struct{}, 1)
 	for _, c := range cmds {
 		ref, err := parseFetch(c)
 		if err != nil {
 			return err
 		}
-		// fetchRefs = append(fetchRefs, ref)
 
 		_, layer, err := remote.ResolveRef(ctx, plumbing.ReferenceName(ref.Name().String()))
 		if err != nil {
@@ -67,8 +65,6 @@ func HandleFetch(ctx context.Context, local git.Repository, remote model.ReadOnl
 	if err := w.Flush(true); err != nil {
 		return fmt.Errorf("writing newline to git after fetch: %w", err)
 	}
-
-	// TODO: consider repacking repo objects
 
 	return nil
 }
