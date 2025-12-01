@@ -19,11 +19,11 @@ type PushRequest struct {
 
 // String condenses [PushRequest] into a string, the raw request received from Git.
 func (r *PushRequest) String() string {
-	str := fmt.Sprintf("%s %s:%s", r.Cmd, r.Src, r.Remote)
 	if r.Force {
-		str = "+" + str
+		return fmt.Sprintf("%s +%s:%s", r.Cmd, r.Src, r.Remote)
 	}
-	return str
+	return fmt.Sprintf("%s +%s:%s", r.Cmd, r.Src, r.Remote)
+
 }
 
 // Parse decodes request fields ensuring the [PushRequest] is of the correct type, is supported,
