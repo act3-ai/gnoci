@@ -189,30 +189,6 @@ func reachableObjs(local git.Repository, remote model.Modeler, newCommits []plum
 	return newReachableObjs, nil
 }
 
-// HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.
-// func packAll(local *git.Repository) (h plumbing.Hash, err error) {
-// 	err = local.RepackObjects(&git.RepackConfig{UseRefDeltas: true})
-// 	if err != nil {
-// 		return h, fmt.Errorf("repacking all objects: %w", err)
-// 	}
-
-// 	pos, ok := local.Storer.(storer.PackedObjectStorer)
-// 	if !ok {
-// 		return h, fmt.Errorf("repository storer is not a storer.PackedObjectStorer")
-// 	}
-
-// 	hs, err := pos.ObjectPacks()
-// 	switch {
-// 	case err != nil:
-// 		return h, fmt.Errorf("listing local object packs: %w", err)
-
-// 	case len(hs) != 1:
-// 		return h, fmt.Errorf("expected 1 packfile, got %d", len(hs))
-// 	default:
-// 		return hs[0], nil
-// 	}
-// }
-
 // createPack builds a packfile using a set of hashes.
 func createPack(local, tmp git.Repository, hashes []plumbing.Hash) (h plumbing.Hash, err error) {
 	// reference implementation: https://github.com/go-git/go-git/blob/v5.16.2/repository.go#L1815

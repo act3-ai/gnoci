@@ -16,18 +16,10 @@ const (
 	Verbosity Option = "verbosity"
 )
 
-// OptionResult is a response to an [OptionRequest] indicating
-// if it's supported.
-type OptionResult string
-
-const (
-	// OptionSupported indicates an option is supported.
-	OptionSupported OptionResult = "ok"
-	// OptionNotSupportd indicates an option is not supported.
-	OptionNotSupportd OptionResult = "unsupported"
-)
-
 // SupportedOption returns true if an [Option] is supported.
+//
+// TODO: This is better suited to be internal, as it's opinionated for git-remote-oci.
+// The purpose of this package is to provide utility for other git remote helper implementations.
 func SupportedOption(option Option) bool {
 	opts := []Option{
 		Verbosity,

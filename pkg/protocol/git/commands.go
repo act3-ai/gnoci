@@ -6,7 +6,7 @@ import (
 
 // Parsable is a parsable command received from Git.
 type Parsable interface {
-	Parse([]string) error // TODO: limit any?
+	Parse([]string) error
 }
 
 // Command is an implemented git-remote-helper command provided by Git.

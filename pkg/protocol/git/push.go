@@ -2,7 +2,6 @@ package git
 
 import (
 	"fmt"
-	"iter"
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -59,32 +58,18 @@ func (r *PushRequest) Parse(fields []string) error {
 	return nil
 }
 
-// PushResult is an indicator whether or not a push was successful.
-type PushResult string
-
-const (
-	// PushOK indicates a push was completed successfully.
-	PushOK = "ok"
-	// PushErr indicates an error was encountered during a push.
-	PushErr = "error"
-)
-
-// PushResponse is a response to a [PushRequest].
+// PushResponse is a status indicating if a push request was handled successfully.
 type PushResponse struct {
-	Result PushResult
-	Err    error
+	// remote reference
+	Remote plumbing.ReferenceName
+	// nil if successful
+	Error error
 }
 
-// PushLister iterates through a set of references.
-type PushLister iter.Seq[plumbing.Reference]
-
-// PushResults creates an [iter.Seq] for push results.
-func PushResults(refs ...plumbing.Reference) ReferenceLister {
-	return func(yield func(plumbing.Reference) bool) {
-		for _, item := range refs {
-			if !yield(item) {
-				return
-			}
-		}
+// String condenses the response into a format readable by Git.
+func (r *PushResponse) String() string {
+	if r.Error != nil {
+		return fmt.Sprintf("error %s %s", r.Remote.String(), r.Error.Error())
 	}
+	return fmt.Sprintf("ok %s", r.Remote.String())
 }

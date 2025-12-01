@@ -2,7 +2,6 @@ package git
 
 import (
 	"fmt"
-	"iter"
 
 	"github.com/go-git/go-git/v5/plumbing"
 )
@@ -49,16 +48,13 @@ func (r *ListRequest) String() string {
 	return str
 }
 
-// ReferenceLister iterates through a set of references.
-type ReferenceLister iter.Seq[plumbing.Reference]
+// ListResponse is a reference and it's commit.
+type ListResponse struct {
+	Reference plumbing.ReferenceName
+	Commit    string
+}
 
-// ListRefs creates an [iter.Seq] for a slice of [plumbing.Reference]s.
-func ListRefs(refs ...plumbing.Reference) ReferenceLister {
-	return func(yield func(plumbing.Reference) bool) {
-		for _, item := range refs {
-			if !yield(item) {
-				return
-			}
-		}
-	}
+// String condenses the response into a format readable by Git.
+func (r *ListResponse) String() string {
+	return fmt.Sprintf("%s %s", r.Commit, r.Reference.String())
 }
