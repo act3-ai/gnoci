@@ -3,6 +3,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +20,8 @@ import (
 	"github.com/act3-ai/gnoci/internal/ociutil"
 	"github.com/act3-ai/gnoci/pkg/apis"
 	"github.com/act3-ai/gnoci/pkg/apis/gnoci.act3-ai.io/v1alpha1"
+	gittypes "github.com/act3-ai/gnoci/pkg/protocol/git"
+	"github.com/act3-ai/gnoci/pkg/protocol/git/comms"
 	"github.com/act3-ai/go-common/pkg/config"
 )
 
@@ -28,8 +31,8 @@ type Git struct {
 	apiScheme *runtime.Scheme
 	// ConfigFiles contains a list of potential configuration file locations.
 	ConfigFiles []string
-	// TODO: Could be dangerous when storing in struct like this... mutex?
-	batcher cmd.BatchReadWriter
+
+	comm comms.Communicator
 
 	// local repository
 	gitDir string
@@ -47,7 +50,7 @@ func NewGit(in io.Reader, out io.Writer, gitDir, shortname, address, version str
 		version:     version,
 		apiScheme:   apis.NewScheme(),
 		ConfigFiles: cfgFiles,
-		batcher:     cmd.NewBatcher(in, out),
+		comm:        comms.NewCommunicator(in, out),
 		gitDir:      gitDir,
 		name:        shortname,
 		address:     strings.TrimPrefix(address, "oci://"),
@@ -96,39 +99,41 @@ func (action *Git) Run(ctx context.Context) error {
 
 // handleCmd returns true, nil if command handling is complete.
 func (action *Git) handleCmd(ctx context.Context) (bool, error) {
-	gc, err := action.batcher.Read(ctx)
-	if err != nil {
-		return false, fmt.Errorf("reading next line: %w", err)
+	c, err := action.comm.LookAhead()
+	switch {
+	case errors.Is(err, gittypes.ErrEndOfInput):
+		return true, nil
+	case errors.Is(err, gittypes.ErrEmptyRequest):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("command look ahead: %w", err)
 	}
 
-	switch gc.Cmd {
-	case cmd.Done:
-		return true, nil
-	case cmd.Empty:
-		return false, nil
-	case cmd.Capabilities:
-		// Git should only need this once on the first cmd, but here is safer
-		if err := cmd.HandleCapabilities(ctx, gc, action.batcher); err != nil {
-			return false, fmt.Errorf("handling capabilities command: %w", err)
+	// Disregard defined ordering of commands sent by Git, staying robust
+	// to potential changes
+	switch c {
+	case gittypes.Capabilities:
+		if err := cmd.HandleCapabilities(ctx, action.comm); err != nil {
+			return false, fmt.Errorf("handling capabilities request: %w", err)
 		}
-	case cmd.Option:
-		if err := cmd.HandleOption(ctx, gc, action.batcher); err != nil {
-			return false, fmt.Errorf("handling option command: %w", err)
+	case gittypes.Options:
+		if err := cmd.HandleOption(ctx, action.comm); err != nil {
+			return false, fmt.Errorf("handling option request: %w", err)
 		}
-	case cmd.List:
-		if err := action.handleList(ctx, gc); err != nil {
-			return false, fmt.Errorf("handling list command: %w", err)
+	case gittypes.List:
+		if err := action.handleList(ctx); err != nil {
+			return false, fmt.Errorf("handling list request: %w", err)
 		}
-	case cmd.Push:
-		if err := action.handlePush(ctx, gc); err != nil {
-			return false, fmt.Errorf("handling push command batch: %w", err)
+	case gittypes.Push:
+		if err := action.handlePush(ctx); err != nil {
+			return false, fmt.Errorf("handling push request batch: %w", err)
 		}
-	case cmd.Fetch:
-		if err := action.handleFetch(ctx, gc); err != nil {
-			return false, fmt.Errorf("handling fetch command batch: %w", err)
+	case gittypes.Fetch:
+		if err := action.handleFetch(ctx); err != nil {
+			return false, fmt.Errorf("handling fetch request batch: %w", err)
 		}
 	default:
-		return false, fmt.Errorf("%w: %s", cmd.ErrUnsupportedCommand, gc.String())
+		return false, fmt.Errorf("%w: %s", gittypes.ErrUnsupportedRequest, c)
 	}
 
 	return false, nil
@@ -152,10 +157,10 @@ func (action *Git) localRepo() (git.Repository, error) {
 	return action.local, nil
 }
 
-func (action *Git) handleList(ctx context.Context, gc cmd.Git) error {
+func (action *Git) handleList(ctx context.Context) error {
 	var local git.Repository
 	var err error
-	if (gc.SubCmd == cmd.ListForPush) && action.gitDir != "" {
+	if action.gitDir != "" {
 		local, err = action.localRepo()
 		if err != nil {
 			return err
@@ -167,21 +172,15 @@ func (action *Git) handleList(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := cmd.HandleList(ctx, local, action.remote, (gc.SubCmd == cmd.ListForPush), gc, action.batcher); err != nil {
+	if err := cmd.HandleList(ctx, local, action.remote, action.comm); err != nil {
 		return fmt.Errorf("running list command: %w", err)
 	}
 
 	return nil
 }
 
-func (action *Git) handlePush(ctx context.Context, gc cmd.Git) error {
-	// TODO: we shouldn't fully push to the remote until all push batches are resolved locally
-	batch, err := action.batcher.ReadBatch(ctx)
-	if err != nil {
-		return fmt.Errorf("reading push batch: %w", err)
-	}
-	fullBatch := append([]cmd.Git{gc}, batch...)
-
+func (action *Git) handlePush(ctx context.Context) error {
+	// TODO: should we not fully push to the remote until all push batches are resolved locally? Just push the packs?
 	local, err := action.localRepo()
 	if err != nil {
 		return err
@@ -192,26 +191,20 @@ func (action *Git) handlePush(ctx context.Context, gc cmd.Git) error {
 		return err
 	}
 
-	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, fullBatch, action.batcher); err != nil {
+	if err := cmd.HandlePush(ctx, local, action.gitDir, action.remote, action.comm); err != nil {
 		return fmt.Errorf("running push commands: %w", err)
 	}
 
 	return nil
 }
 
-func (action *Git) handleFetch(ctx context.Context, gc cmd.Git) error {
-	batch, err := action.batcher.ReadBatch(ctx)
-	if err != nil {
-		return fmt.Errorf("reading fetch batch: %w", err)
-	}
-	fullBatch := append([]cmd.Git{gc}, batch...)
-
+func (action *Git) handleFetch(ctx context.Context) error {
 	local, err := action.localRepo()
 	if err != nil {
 		return err
 	}
 
-	if err := cmd.HandleFetch(ctx, local, action.remote, fullBatch, action.batcher); err != nil {
+	if err := cmd.HandleFetch(ctx, local, action.remote, action.comm); err != nil {
 		return fmt.Errorf("running fetch command: %w", err)
 	}
 

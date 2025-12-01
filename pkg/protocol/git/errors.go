@@ -13,4 +13,6 @@ var (
 	// ErrEmptyRequest is an indicator that Git is either breaking up a batch of
 	// requests or has finished sending requests.
 	ErrEmptyRequest = errors.New("empty request")
+	// ErrEndOfInput marks the end of input from Git.
+	ErrEndOfInput = errors.New("end of input")
 )

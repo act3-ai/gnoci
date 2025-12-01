@@ -84,7 +84,7 @@ func (c *defaultCommunicator) LookAhead() (git.Command, error) {
 
 	req := strings.Fields(line)
 	if len(req) < 1 {
-		return "", fmt.Errorf("empty request")
+		return "", git.ErrEmptyRequest
 	}
 	c.previous = req
 
@@ -318,7 +318,7 @@ func (c *defaultCommunicator) readLine() (string, error) {
 		return "", fmt.Errorf("reading single command from git-lfs: %w", c.in.Err())
 	case !ok:
 		// EOF
-		return "", nil
+		return "", git.ErrEndOfInput
 	default:
 		return c.in.Text(), nil
 	}

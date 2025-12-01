@@ -2,7 +2,6 @@ package git
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 )
 
@@ -15,18 +14,6 @@ type Option string
 const (
 	Verbosity Option = "verbosity"
 )
-
-// SupportedOption returns true if an [Option] is supported.
-//
-// TODO: This is better suited to be internal, as it's opinionated for git-remote-oci.
-// The purpose of this package is to provide utility for other git remote helper implementations.
-func SupportedOption(option Option) bool {
-	opts := []Option{
-		Verbosity,
-	}
-
-	return slices.Contains(opts, option)
-}
 
 // OptionRequest is a command received from Git requesting an option to be set.
 //
@@ -57,13 +44,11 @@ func (r *OptionRequest) Parse(fields []string) error {
 
 	switch opt {
 	case Verbosity:
-		// ensure valid int, if it's obsurd we'll convert it to a sane value when handled
+		// ensure valid int
 		_, err := strconv.Atoi(val)
 		if err != nil {
 			return fmt.Errorf("unable to convert verbosity value to int: %w", err)
 		}
-	default:
-		return fmt.Errorf("%w: option %s is not supported", ErrUnsupportedRequest, opt)
 	}
 	r.Opt = opt
 

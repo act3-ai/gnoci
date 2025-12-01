@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+
+	"github.com/act3-ai/gnoci/pkg/protocol/git"
+	"github.com/act3-ai/gnoci/pkg/protocol/git/comms"
 )
 
 // https://git-scm.com/docs/gitremote-helpers#_options
@@ -21,56 +24,47 @@ var Options = []Command{
 }
 
 // HandleOption executes an option command.
-func HandleOption(ctx context.Context, g Git, w Writer) error {
-	const (
-		ok          = "ok"
-		unsupported = "unsupported"
-	)
+func HandleOption(ctx context.Context, comm comms.Communicator) error {
+	req, err := comm.ParseOptionRequest()
+	if err != nil {
+		return fmt.Errorf("parsing option request: %w", err)
+	}
+	log := slog.With(slog.String("command", req.String()))
 
 	// https://git-scm.com/docs/gitremote-helpers#Documentation/gitremote-helpers.txt-optionnamevalue
-	var result string
-	err := handleOption(ctx, g)
+	err = handleOption(ctx, req)
 	switch {
-	case errors.Is(err, ErrUnsupportedCommand):
-		slog.DebugContext(ctx, "received unsupported option command", "command", g.SubCmd)
-		result = unsupported
+	case errors.Is(err, git.ErrUnsupportedRequest):
+		log.DebugContext(ctx, "received unsupported option command")
+		if err := comm.WriteOptionResponse(false); err != nil {
+			return fmt.Errorf("writing option response: %w", err)
+		}
 	case err != nil:
-		slog.ErrorContext(ctx, "failed to handle option command", "command", g.SubCmd)
-		result = err.Error()
+		log.ErrorContext(ctx, "failed to handle option command")
+		return fmt.Errorf("handling option: %w", err)
 	default:
-		slog.DebugContext(ctx, "successfully handled option command", "command", g.SubCmd)
-		result = ok
+		log.DebugContext(ctx, "successfully handled option command")
+		if err := comm.WriteOptionResponse(true); err != nil {
+			return fmt.Errorf("writing option response: %w", err)
+		}
 	}
 
-	if err := w.Write(ctx, result); err != nil {
-		return fmt.Errorf("writing option response %s: %w", g.SubCmd, err)
-	}
-	// Git will print a warning to stderr if a newline is written
-	if err := w.Flush(false); err != nil {
-		return fmt.Errorf("flushing option writes: %w", err)
-	}
 	return nil
 }
 
-func handleOption(ctx context.Context, g Git) error {
-	slog.DebugContext(ctx, "handling option", slog.String("command", g.String()))
+func handleOption(ctx context.Context, req *git.OptionRequest) error {
+	slog.DebugContext(ctx, "handling option", slog.String("command", req.String()))
 
-	switch g.SubCmd {
-	case OptionVerbosity:
-		return verbosity(g.Data)
+	switch req.Opt {
+	case git.Verbosity:
+		return verbosity(req.Value)
 	default:
-		// sanity, should never happen
-		return fmt.Errorf("%w: %s", ErrUnsupportedCommand, g.String())
+		return fmt.Errorf("%w: %s", git.ErrUnsupportedRequest, req.String())
 	}
 }
 
 // verbosity handles the verbosity option.
-func verbosity(args []string) error {
-	if len(args) != 1 {
-		return errors.New("missing value from verbosity command")
-	}
-	value := args[0]
-
+func verbosity(value string) error {
 	val, err := strconv.Atoi(value)
 	if err != nil {
 		return fmt.Errorf("converting verbosity value to int: %w", err)
@@ -90,16 +84,5 @@ func verbosity(args []string) error {
 
 	slog.SetLogLoggerLevel(lvl)
 
-	return nil
-}
-
-// validOption ensures an option is properly formed.
-func validOption(ctx context.Context, fields ...string) error {
-	if len(fields) != 3 {
-		slog.ErrorContext(ctx, "invalid number of arguments to option command",
-			"got", fmt.Sprintf("%d", len(fields)),
-			"want", "3")
-		return fmt.Errorf("invalid number of args to option command")
-	}
 	return nil
 }
