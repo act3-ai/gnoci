@@ -22,7 +22,7 @@ func (r *PushRequest) String() string {
 	if r.Force {
 		return fmt.Sprintf("%s +%s:%s", r.Cmd, r.Src, r.Remote)
 	}
-	return fmt.Sprintf("%s +%s:%s", r.Cmd, r.Src, r.Remote)
+	return fmt.Sprintf("%s %s:%s", r.Cmd, r.Src, r.Remote)
 
 }
 
