@@ -4,19 +4,19 @@ import (
 	"dagger/gnoci/internal/dagger"
 )
 
-const (
-	goControllerGen = "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.19.0"
-)
-
 // Generate with controller-gen.
 func (g *Gnoci) Generate(
+	// Top level source code directory
+	// +defaultPath="/"
+	// +ignore=["**", "!go.*", "!pkg", "!internal", "!cmd", "!docs"]
 	src *dagger.Directory,
 ) *dagger.Changeset {
-	return dag.Go().
-		WithSource(src.Filter(dagger.DirectoryFilterOpts{Exclude: []string{".dagger/*"}})).
-		WithEnvVariable("GOBIN", "/work/src/tool").
-		Exec([]string{"go", "install", goControllerGen}).
-		WithExec([]string{"go", "generate", "./..."}).
-		Directory(".").
-		Changes(src)
+	afterSrc := g.goWithSource(src).
+		Generate(dagger.GoWithSourceGenerateOpts{
+			Packages: []string{"./..."},
+		}).
+		Source()
+	beforeSrc := dag.Container().WithDirectory("/src", src).Directory("/src")
+
+	return afterSrc.Changes(beforeSrc)
 }
