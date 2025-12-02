@@ -247,13 +247,13 @@ func Test_reverseCommunicator_ReceiveCapabilitiesResponse(t *testing.T) {
 		in := new(bytes.Buffer)
 		revcomm := NewReverseCommunicator(in, nil)
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s\n", git.CapabilityOption)))
+		_, err := fmt.Fprintf(in, "%s\n", git.CapabilityOption)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("%s\n", git.CapabilityFetch)))
+		_, err = fmt.Fprintf(in, "%s\n", git.CapabilityFetch)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("%s\n", git.CapabilityPush)))
+		_, err = fmt.Fprintf(in, "%s\n", git.CapabilityPush)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveCapabilitiesResponse()
@@ -266,11 +266,11 @@ func Test_reverseCommunicator_ReceiveCapabilitiesResponse(t *testing.T) {
 		in := new(bytes.Buffer)
 		revcomm := NewReverseCommunicator(in, nil)
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s\n", git.CapabilityOption)))
+		_, err := fmt.Fprintf(in, "%s\n", git.CapabilityOption)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("%s\n", git.CapabilityFetch)))
+		_, err = fmt.Fprintf(in, "%s\n", git.CapabilityFetch)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveCapabilitiesResponse()
@@ -283,9 +283,9 @@ func Test_reverseCommunicator_ReceiveCapabilitiesResponse(t *testing.T) {
 		in := new(bytes.Buffer)
 		revcomm := NewReverseCommunicator(in, nil)
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s\n", git.Capability("foo"))))
+		_, err := fmt.Fprintf(in, "%s\n", git.Capability("foo"))
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveCapabilitiesResponse()
@@ -300,7 +300,7 @@ func Test_reverseCommunicator_ReceiveOptionResponse(t *testing.T) {
 		in := new(bytes.Buffer)
 		revcomm := NewReverseCommunicator(in, nil)
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s\n", git.OptionSupported)))
+		_, err := fmt.Fprintf(in, "%s\n", git.OptionSupported)
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveOptionResponse()
@@ -313,7 +313,7 @@ func Test_reverseCommunicator_ReceiveOptionResponse(t *testing.T) {
 		in := new(bytes.Buffer)
 		revcomm := NewReverseCommunicator(in, nil)
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s\n", git.OptionNotSupported)))
+		_, err := fmt.Fprintf(in, "%s\n", git.OptionNotSupported)
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveOptionResponse()
@@ -326,7 +326,7 @@ func Test_reverseCommunicator_ReceiveOptionResponse(t *testing.T) {
 		in := new(bytes.Buffer)
 		revcomm := NewReverseCommunicator(in, nil)
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s\n", git.Option("foo"))))
+		_, err := fmt.Fprintf(in, "%s\n", git.Option("foo"))
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveOptionResponse()
@@ -348,13 +348,13 @@ func Test_reverseCommunicator_ReceiveListResponse(t *testing.T) {
 		commit2 := "commit2"
 		commit3 := "commit3"
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s %s\n", commit1, ref1)))
+		_, err := fmt.Fprintf(in, "%s %s\n", commit1, ref1)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("%s %s\n", commit2, ref2)))
+		_, err = fmt.Fprintf(in, "%s %s\n", commit2, ref2)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("%s %s\n", commit3, ref3)))
+		_, err = fmt.Fprintf(in, "%s %s\n", commit3, ref3)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveListResponse()
@@ -369,9 +369,9 @@ func Test_reverseCommunicator_ReceiveListResponse(t *testing.T) {
 
 		commit1 := "commit1"
 
-		_, err := in.Write([]byte(fmt.Sprintf("%s\n", commit1)))
+		_, err := fmt.Fprintf(in, "%s\n", commit1)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceiveListResponse()
@@ -390,13 +390,13 @@ func Test_reverseCommunicator_ReceivePushResponseBatch(t *testing.T) {
 		remote2 := "bar"
 		remote3 := "foobar"
 
-		_, err := in.Write([]byte(fmt.Sprintf("ok %s\n", remote1)))
+		_, err := fmt.Fprintf(in, "ok %s\n", remote1)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("ok %s\n", remote2)))
+		_, err = fmt.Fprintf(in, "ok %s\n", remote2)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("ok %s\n", remote3)))
+		_, err = fmt.Fprintf(in, "ok %s\n", remote3)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceivePushResponseBatch()
@@ -411,9 +411,9 @@ func Test_reverseCommunicator_ReceivePushResponseBatch(t *testing.T) {
 
 		remote1 := "foo"
 
-		_, err := in.Write([]byte(fmt.Sprintf("ok too many fields%s\n", remote1)))
+		_, err := fmt.Fprintf(in, "ok too many fields%s\n", remote1)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceivePushResponseBatch()
@@ -430,13 +430,13 @@ func Test_reverseCommunicator_ReceivePushResponseBatch(t *testing.T) {
 		remote2 := "bar"
 		remote3 := "foobar"
 
-		_, err := in.Write([]byte(fmt.Sprintf("ok %s\n", remote1)))
+		_, err := fmt.Fprintf(in, "ok %s\n", remote1)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("error %s something bad happened\n", remote2)))
+		_, err = fmt.Fprintf(in, "error %s something bad happened\n", remote2)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("error %s oh no not again\n", remote3)))
+		_, err = fmt.Fprintf(in, "error %s oh no not again\n", remote3)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceivePushResponseBatch()
@@ -452,11 +452,11 @@ func Test_reverseCommunicator_ReceivePushResponseBatch(t *testing.T) {
 		remote1 := "foo"
 		remote2 := "bar"
 
-		_, err := in.Write([]byte(fmt.Sprintf("ok %s\n", remote1)))
+		_, err := fmt.Fprintf(in, "ok %s\n", remote1)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte(fmt.Sprintf("error %s\n", remote2)))
+		_, err = fmt.Fprintf(in, "error %s\n", remote2)
 		assert.NoError(t, err)
-		_, err = in.Write([]byte("\n"))
+		_, err = fmt.Fprint(in, "\n")
 		assert.NoError(t, err)
 
 		err = revcomm.ReceivePushResponseBatch()

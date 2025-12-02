@@ -51,8 +51,8 @@ func (r *OptionRequest) Parse(fields []string) error {
 	}
 	r.Cmd = cmd
 
-	switch opt {
-	case Verbosity:
+	// TODO: switch statement when more options are added
+	if opt == Verbosity {
 		// ensure valid int
 		_, err := strconv.Atoi(val)
 		if err != nil {
