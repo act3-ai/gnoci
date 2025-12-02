@@ -28,11 +28,12 @@ const (
 func (t *Test) CoverageDocs(ctx context.Context,
 	src *dagger.Directory,
 ) *dagger.Changeset {
+	newSrc := src
 	coverage := t.Coverage(src)
 
-	return dag.Directory().
+	return newSrc.
 		WithFile(coverageTreemapFile, t.CoverageTreeMap(ctx, coverage)).
-		WithFile(coverageBadgeFile, t.CoverageBadge(ctx, src, coverage)).
+		WithFile(coverageBadgeFile, t.CoverageBadge(ctx, newSrc, coverage)).
 		Changes(src)
 }
 

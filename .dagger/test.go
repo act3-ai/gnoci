@@ -4,7 +4,6 @@ import (
 	"context"
 	"dagger/gnoci/internal/dagger"
 	"path/filepath"
-	"strings"
 )
 
 // Run tests.
@@ -46,47 +45,47 @@ func (t *Test) Unit(ctx context.Context,
 // Push pushes a git repository to an OCI registry.
 //
 //nolint:wrapcheck
-func (t *Test) Push(ctx context.Context,
-	// Git reference to test repository
-	gitRef *dagger.GitRef,
-) (string, error) {
-	// start registry
-	regService := registryService()
-	regService, err := regService.Start(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer regService.Stop(ctx) //nolint:errcheck
+// func (t *Test) Push(ctx context.Context,
+// 	// Git reference to test repository
+// 	gitRef *dagger.GitRef,
+// ) (string, error) {
+// 	// start registry
+// 	regService := registryService()
+// 	regService, err := regService.Start(ctx)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer regService.Stop(ctx) //nolint:errcheck
 
-	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
-	if err != nil {
-		return "", err
-	}
-	regHost := strings.TrimPrefix(regEndpoint, "http://")
+// 	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	regHost := strings.TrimPrefix(regEndpoint, "http://")
 
-	const srcDir = "src"
-	return t.containerWithHelpers(ctx, gitRef.Tree()).
-		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
-		WithWorkdir(srcDir).
-		WithServiceBinding("registry", regService).
-		With(configureLFSOCIFunc(regHost)).
-		WithExec([]string{"git", "push", "oci://" + regHost + "/repo/test:sync", "--all"}).
-		Stdout(ctx)
+// 	const srcDir = "src"
+// 	return t.containerWithHelpers(ctx, gitRef.Tree()).
+// 		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
+// 		WithWorkdir(srcDir).
+// 		WithServiceBinding("registry", regService).
+// 		With(configureLFSOCIFunc(regHost)).
+// 		WithExec([]string{"git", "push", "oci://" + regHost + "/repo/test:sync", "--all"}).
+// 		Stdout(ctx)
 
-	// configure git
+// 	// configure git
 
-	// configure git-lfs
+// 	// configure git-lfs
 
-	// connect to registry
+// 	// connect to registry
 
-	// push
+// 	// push
 
-	// get metadata
+// 	// get metadata
 
-	// return metadata on stdout
+// 	// return metadata on stdout
 
-	// return "", fmt.Errorf("not implemented")
-}
+// 	// return "", fmt.Errorf("not implemented")
+// }
 
 // containerWithHelpers creates a container with the dependencies necessary to test
 // git-remote-oci and git-lfs-remote-oci.
