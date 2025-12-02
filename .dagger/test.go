@@ -40,6 +40,8 @@ func (t *Test) Unit(ctx context.Context) (string, error) {
 }
 
 // Push pushes a git repository to an OCI registry.
+//
+//nolint:wrapcheck
 func (t *Test) Push(ctx context.Context,
 	// Git reference to test repository
 	gitRef *dagger.GitRef,
@@ -50,7 +52,7 @@ func (t *Test) Push(ctx context.Context,
 	if err != nil {
 		return "", err
 	}
-	defer regService.Stop(ctx)
+	defer regService.Stop(ctx) //nolint:errcheck
 
 	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
 	if err != nil {

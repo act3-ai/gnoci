@@ -9,6 +9,7 @@ import (
 const (
 	goCoverTreemap = "github.com/nikolaydubina/go-cover-treemap@latest"
 
+	coverageDocsDir      = "docs/figures/badges/coverage"
 	coverageFile         = "coverage.out"
 	coverageFilteredFile = "coverage.filtered"
 	coverageTreemapFile  = "coverage-treemap.svg"

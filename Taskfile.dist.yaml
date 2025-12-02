@@ -37,3 +37,8 @@ tasks:
       - "**/*.go"
     cmds:
       - go generate ./...
+
+  release:
+    desc: "Run release process."
+    cmds:
+      - ./release.sh -i
