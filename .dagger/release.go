@@ -46,8 +46,8 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 
 	coverageDocs := g.Test().
 		CoverageDocs(ctx).
-		Changes(src.Directory(coverageDocsDir))
-	src = src.WithChanges(coverageDocs)
+		Directory(coverageDocsDir)
+	src = src.WithDirectory(coverageDocsDir, coverageDocs)
 
 	return src.Changes(gitRef.Tree()), nil
 }
