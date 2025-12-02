@@ -31,10 +31,10 @@ func TestNewCommunicator(t *testing.T) {
 }
 
 func Test_defaultCommunicator_LookAhead(t *testing.T) {
-	t.Run("Success", func(t *testing.T) {
-		in := new(bytes.Buffer)
-		out := new(bytes.Buffer)
-	})
+	// t.Run("Success", func(t *testing.T) {
+	// 	in := new(bytes.Buffer)
+	// 	out := new(bytes.Buffer)
+	// })
 }
 
 func Test_defaultCommunicator_previousOrNext(t *testing.T) {
