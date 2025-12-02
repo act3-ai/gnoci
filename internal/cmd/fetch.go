@@ -5,32 +5,30 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/opencontainers/go-digest"
 
 	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/act3-ai/gnoci/internal/model"
+	"github.com/act3-ai/gnoci/pkg/protocol/git/comms"
 )
 
 // HandleFetch executes a batch of fetch commands.
-func HandleFetch(ctx context.Context, local git.Repository, remote model.ReadOnlyModeler, cmds []Git, w Writer) error {
+func HandleFetch(ctx context.Context, local git.Repository, remote model.ReadOnlyModeler, comm comms.Communicator) error {
 	_, err := remote.Fetch(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching remote metadata: %w", err)
 	}
 
-	// fetchRefs := make([]*plumbing.Reference, 0, len(cmds))
-	packLayers := make(map[digest.Digest]struct{}, 1)
-	for _, c := range cmds {
-		ref, err := parseFetch(c)
-		if err != nil {
-			return err
-		}
-		// fetchRefs = append(fetchRefs, ref)
+	reqs, err := comm.ParseFetchRequestBatch()
+	if err != nil {
+		return fmt.Errorf("parsing fetch request batch: %w", err)
+	}
 
-		_, layer, err := remote.ResolveRef(ctx, plumbing.ReferenceName(ref.Name().String()))
+	packLayers := make(map[digest.Digest]struct{}, 1)
+	for _, req := range reqs {
+		_, layer, err := remote.ResolveRef(ctx, req.Ref.Name())
 		if err != nil {
 			return fmt.Errorf("resolving remote reference OCI layer: %w", err)
 		}
@@ -64,22 +62,9 @@ func HandleFetch(ctx context.Context, local git.Repository, remote model.ReadOnl
 	}
 	slog.InfoContext(ctx, "done fetching packfiles")
 
-	if err := w.Flush(true); err != nil {
-		return fmt.Errorf("writing newline to git after fetch: %w", err)
+	if err := comm.WriteFetchResponse(); err != nil {
+		return fmt.Errorf("writing fetch response: %w", err)
 	}
-
-	// TODO: consider repacking repo objects
 
 	return nil
-}
-
-// parseFetch parses a fetch command received from Git, returning it as a go-git reference.
-func parseFetch(c Git) (*plumbing.Reference, error) {
-	if len(c.Data) < 2 {
-		return nil, fmt.Errorf("insufficient number of arguments in fetch command got %d, expected 2", len(c.Data))
-	}
-	hash := c.Data[0]
-	name := c.Data[1]
-
-	return plumbing.NewHashReference(plumbing.ReferenceName(name), plumbing.NewHash(hash)), nil
 }

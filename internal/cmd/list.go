@@ -6,17 +6,23 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/act3-ai/gnoci/internal/model"
+	gittypes "github.com/act3-ai/gnoci/pkg/protocol/git"
+	"github.com/act3-ai/gnoci/pkg/protocol/git/comms"
 )
 
 // HandleList executes the list command. Lists refs one per line.
-func HandleList(ctx context.Context, local git.Repository, remote model.Modeler, forPush bool, g Git, w Writer) error {
+func HandleList(ctx context.Context, local git.Repository, remote model.Modeler, comm comms.Communicator) error {
+	req, err := comm.ParseListRequest()
+	if err != nil {
+		return fmt.Errorf("parsing list request: %w", err)
+	}
+
 	var headRef *plumbing.Reference
-	var err error
-	if !forPush && local != nil {
+	if !req.ForPush && local != nil {
 		// discover local HEAD ref, so we know what to resolve in the remote
 		headRef, err = local.Head()
 		if err != nil {
@@ -29,29 +35,39 @@ func HandleList(ctx context.Context, local git.Repository, remote model.Modeler,
 
 	// TODO: what about refs/remotes/<shortname>/<ref>
 
+	headRefs := remote.HeadRefs()
+	tagRefs := remote.TagRefs()
+	results := make([]gittypes.ListResponse, len(headRefs)+len(tagRefs))
+
 	// list remote branch references
-	for k, v := range remote.HeadRefs() {
+	for k, v := range headRefs {
 		// list HEAD if one exists locally
 		if headRef != nil && (k.String() == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
-			if err := w.Write(ctx, fmt.Sprintf("@%s HEAD", headRef.Name())); err != nil {
-				return fmt.Errorf("writing HEAD ref to Git: %w", err)
+			result := gittypes.ListResponse{
+				Reference: plumbing.ReferenceName(fmt.Sprintf("@%s", headRef.Name())),
+				Commit:    "HEAD",
 			}
+			results = append(results, result)
 		}
 
-		if err := w.Write(ctx, fmt.Sprintf("%s %s", v.Commit, k)); err != nil {
-			return fmt.Errorf("writing branch ref to Git: %w", err)
+		result := gittypes.ListResponse{
+			Reference: k,
+			Commit:    v.Commit,
 		}
+		results = append(results, result)
 	}
 
 	// list remote tag references
-	for k, v := range remote.TagRefs() {
-		if err := w.Write(ctx, fmt.Sprintf("%s %s", v.Commit, k)); err != nil {
-			return fmt.Errorf("writing tag ref to Git: %w", err)
+	for k, v := range tagRefs {
+		result := gittypes.ListResponse{
+			Reference: k,
+			Commit:    v.Commit,
 		}
+		results = append(results, result)
 	}
 
-	if err := w.Flush(true); err != nil {
-		return fmt.Errorf("flushing writer: %w", err)
+	if err := comm.WriteListResponse(results); err != nil {
+		return fmt.Errorf("writing list response: %w", err)
 	}
 
 	return nil

@@ -1,4 +1,6 @@
 // Package comms facilitates receiving requests from and writing responses to git-lfs.
+//
+// Protocol Reference: https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md.
 package comms
 
 import (

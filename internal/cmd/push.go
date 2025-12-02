@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -19,12 +18,19 @@ import (
 	"github.com/act3-ai/gnoci/internal/git"
 	"github.com/act3-ai/gnoci/internal/model"
 	"github.com/act3-ai/gnoci/internal/refcomp"
+	gittypes "github.com/act3-ai/gnoci/pkg/protocol/git"
+	"github.com/act3-ai/gnoci/pkg/protocol/git/comms"
 )
 
 // HandlePush executes a batch of push commands.
-func HandlePush(ctx context.Context, local git.Repository, localDir string, remote model.Modeler, cmds []Git, bw BatchWriter) error {
+func HandlePush(ctx context.Context, local git.Repository, localDir string, remote model.Modeler, comm comms.Communicator) error {
+	reqs, err := comm.ParsePushRequestBatch()
+	if err != nil {
+		return fmt.Errorf("parsing push request batch: %w", err)
+	}
+
 	// compare local refs to remote
-	newCommits, refsInNewPack, results := compareRefs(ctx, local, remote, cmds)
+	newCommits, refsInNewPack, results := compareRefs(ctx, local, remote, reqs)
 
 	// resolve new reachable objects from new commit set
 	newReachableObjs, err := reachableObjs(local, remote, newCommits)
@@ -80,8 +86,8 @@ func HandlePush(ctx context.Context, local git.Repository, localDir string, remo
 	}
 	slog.InfoContext(ctx, "successfully pushed to remote", "address", remote.Ref(), "digest", desc.Digest, "size", desc.Size)
 
-	if err := bw.WriteBatch(ctx, results...); err != nil {
-		return fmt.Errorf("writing push results to git: %w", err)
+	if err := comm.WritePushResponse(results); err != nil {
+		return fmt.Errorf("writing push response: %w", err)
 	}
 
 	return nil
@@ -90,39 +96,49 @@ func HandlePush(ctx context.Context, local git.Repository, localDir string, remo
 // compareRefs compares all references in the set of push cmds between the local
 // and remote repositories, returning a set of new commit hashes, references to
 // commits in the to-be-created packfile, and a list of results to be written to Git.
-func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler, cmds []Git) ([]plumbing.Hash, []*plumbing.Reference, []string) {
+func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler, reqs []gittypes.PushRequest) ([]plumbing.Hash, []*plumbing.Reference, []gittypes.PushResponse) {
 	rc := refcomp.NewCachedRefComparer(local, remote)
 
 	// resolve state of refs in remote
 	newCommitTips := make(map[plumbing.Hash]struct{})
 	refsInNewPack := make([]*plumbing.Reference, 0) // len <= newCommites
-	results := make([]string, 0, len(cmds))
-	for _, c := range cmds {
-		l, r, force, err := parseRefPair(c)
-		if err != nil {
-			results = append(results, fmtResult(false, r, fmt.Errorf("parsing push command: %w", err).Error()))
-			continue
-		}
-
-		rp, err := rc.Compare(ctx, force, l, r)
+	results := make([]gittypes.PushResponse, 0, len(reqs))
+	for _, req := range reqs {
+		rp, err := rc.Compare(ctx, req.Force, req.Src, req.Remote)
 		if errors.Is(err, model.ErrUnsupportedReferenceType) {
-			results = append(results, fmtResult(false, r, fmt.Errorf("encountered unsupported reference type when comparing local to remote ref: %w", err).Error()))
+			result := gittypes.PushResponse{
+				Remote: req.Remote,
+				Error:  fmt.Errorf("encountered unsupported reference type when comparing local to remote ref: %w", err),
+			}
+			results = append(results, result)
 			continue
 		}
 		if err != nil {
-			results = append(results, fmtResult(false, r, fmt.Errorf("comparing local ref to remote ref: %w", err).Error()))
+			result := gittypes.PushResponse{
+				Remote: req.Remote,
+				Error:  fmt.Errorf("comparing local ref to remote ref: %w", err),
+			}
+			results = append(results, result)
 			continue
 		}
 
 		switch {
 		case (rp.Status & refcomp.StatusDelete) == refcomp.StatusDelete:
-			err := remote.DeleteRef(ctx, r)
+			err := remote.DeleteRef(ctx, req.Remote)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
-				results = append(results, fmtResult(false, r, fmt.Errorf("encountered unsupported reference type when deleting remote ref: %w", err).Error()))
+				result := gittypes.PushResponse{
+					Remote: req.Remote,
+					Error:  fmt.Errorf("encountered unsupported reference type when deleting remote ref: %w", err),
+				}
+				results = append(results, result)
 				continue
 			}
 			if err != nil {
-				results = append(results, fmtResult(false, r, fmt.Errorf("deleting reference from remote: %w", err).Error()))
+				result := gittypes.PushResponse{
+					Remote: req.Remote,
+					Error:  fmt.Errorf("deleting reference from remote: %w", err),
+				}
+				results = append(results, result)
 				continue
 			}
 		case (rp.Status & refcomp.StatusForce) == refcomp.StatusForce:
@@ -134,17 +150,26 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 			if rp.Layer == "" {
 				// defer the ref update until we know the packfile layer digest
 				refsInNewPack = append(refsInNewPack, plumbing.NewHashReference(rp.Remote.Name(), rp.Local.Hash()))
-				results = append(results, fmtResult(true, r, ""))
+				result := gittypes.PushResponse{Remote: req.Remote}
+				results = append(results, result)
 				continue
 			}
 			// update remote ref's commit to local ref's
 			err := remote.UpdateRef(ctx, plumbing.NewHashReference(rp.Remote.Name(), rp.Local.Hash()), rp.Layer)
 			if errors.Is(err, model.ErrUnsupportedReferenceType) {
-				results = append(results, fmtResult(false, r, fmt.Errorf("encountered unsupported reference type when updating remote ref: %w", err).Error()))
+				result := gittypes.PushResponse{
+					Remote: req.Remote,
+					Error:  fmt.Errorf("encountered unsupported reference type when updating remote ref: %w", err),
+				}
+				results = append(results, result)
 				continue
 			}
 			if err != nil {
-				results = append(results, fmtResult(false, r, fmt.Errorf("updating remote reference: %w", err).Error()))
+				result := gittypes.PushResponse{
+					Remote: req.Remote,
+					Error:  fmt.Errorf("updating remote reference: %w", err),
+				}
+				results = append(results, result)
 				continue
 			}
 		default:
@@ -153,7 +178,8 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 			// TODO: add a "skip" Status when refs are skipped due to lack of support for its type?
 			// without it, the above error hits those cases where we log the skip elsewhere
 		}
-		results = append(results, fmtResult(true, r, ""))
+		result := gittypes.PushResponse{Remote: req.Remote}
+		results = append(results, result)
 	}
 
 	dedupNewCommits := make([]plumbing.Hash, 0, len(newCommitTips))
@@ -189,30 +215,6 @@ func reachableObjs(local git.Repository, remote model.Modeler, newCommits []plum
 	return newReachableObjs, nil
 }
 
-// HACK: having trouble creating packfiles, let alone thin packs, so we'll do the entire repo for now. If needed, we can fallback to shelling out and contribute to go-git later.
-// func packAll(local *git.Repository) (h plumbing.Hash, err error) {
-// 	err = local.RepackObjects(&git.RepackConfig{UseRefDeltas: true})
-// 	if err != nil {
-// 		return h, fmt.Errorf("repacking all objects: %w", err)
-// 	}
-
-// 	pos, ok := local.Storer.(storer.PackedObjectStorer)
-// 	if !ok {
-// 		return h, fmt.Errorf("repository storer is not a storer.PackedObjectStorer")
-// 	}
-
-// 	hs, err := pos.ObjectPacks()
-// 	switch {
-// 	case err != nil:
-// 		return h, fmt.Errorf("listing local object packs: %w", err)
-
-// 	case len(hs) != 1:
-// 		return h, fmt.Errorf("expected 1 packfile, got %d", len(hs))
-// 	default:
-// 		return hs[0], nil
-// 	}
-// }
-
 // createPack builds a packfile using a set of hashes.
 func createPack(local, tmp git.Repository, hashes []plumbing.Hash) (h plumbing.Hash, err error) {
 	// reference implementation: https://github.com/go-git/go-git/blob/v5.16.2/repository.go#L1815
@@ -234,40 +236,4 @@ func createPack(local, tmp git.Repository, hashes []plumbing.Hash) (h plumbing.H
 	}
 
 	return h, nil
-}
-
-// parseRefPair validates a reference pair, <local>:<remote>, returning the local and remote references respectively.
-// The returned boolean indicates a force update should be performed..
-func parseRefPair(c Git) (plumbing.ReferenceName, plumbing.ReferenceName, bool, error) {
-	if c.Data == nil {
-		return "", "", false, fmt.Errorf("no arguments in push command")
-	}
-
-	pair := c.Data[0]
-	if pair == "" {
-		return "", "", false, errors.New("empty reference pair string, expected <local>:<remote>")
-	}
-
-	s := strings.Split(pair, ":")
-	if len(s) != 2 {
-		return "", "", false, fmt.Errorf("failed to split reference pair string, got %s, expected <local>:<remote>", pair)
-	}
-	local := s[0]
-	remote := s[1]
-
-	var force bool
-	if strings.HasPrefix(local, "+") {
-		force = true
-		local = strings.TrimPrefix(local, "+")
-	}
-
-	return plumbing.ReferenceName(local), plumbing.ReferenceName(remote), force, nil
-}
-
-// fmtResult aids in formating a result string written to git. Why is unnecessary if ok == true.
-func fmtResult(ok bool, dst plumbing.ReferenceName, why string) string {
-	if ok {
-		return fmt.Sprintf("ok %s", dst.String())
-	}
-	return fmt.Sprintf("error %s %s?", dst.String(), why)
 }

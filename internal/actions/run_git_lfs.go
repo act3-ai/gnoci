@@ -132,11 +132,11 @@ func (action *GitLFS) Run(ctx context.Context) error {
 
 	subject, err := remote.FetchOrDefault(ctx)
 	if err != nil {
-		return fmt.Errorf("fetching base git OCI metadata: %w", err)
+		return action.comm.WriteInitResponse(ctx, fmt.Errorf("fetching base git OCI metadata: %w", err))
 	}
 
 	if _, err = remote.FetchLFSOrDefault(ctx); err != nil {
-		return err
+		return action.comm.WriteInitResponse(ctx, err)
 	}
 
 	if err := action.comm.WriteInitResponse(ctx, nil); err != nil {

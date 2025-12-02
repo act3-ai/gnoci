@@ -9,29 +9,39 @@ import (
 	"github.com/act3-ai/gnoci/pkg/protocol/lfs"
 )
 
-// ReverseCommunicatorLFS is the reverse of lfs [comms.Communicator], acting as git-lfs
+// ReverseCommunicatorLFS is the reverse of lfs comms.Communicator, acting as git-lfs
 // sending custom transfer protocol requests and receiving responses.
 //
 // In addition to regular errors, methods return errors if the underlying message
 // contains an error.
 type ReverseCommunicatorLFS interface {
+	RequestSenderLFS
+	ResponseReceiverLFS
+}
+
+// RequestSenderLFS provides methods for sending requests.
+type RequestSenderLFS interface {
 	// SendInitRequest sends an [lfs.InitRequest].
 	SendInitRequest(op lfs.Operation, remote string) error
-	// ReceiveInitResponse receives an [lfs.InitResponse].
-	ReceiveInitResponse() error
 	// SendTransferUploadRequest sends an [lfs.TransferRequest] with event
 	// [lfs.UploadEvent].
 	SendTransferUploadRequest(oid string, size int64, path string) error
 	// SendTransferDownloadRequest sends an [lfs.TransferRequest] with event
 	// [lfs.DownloadEvent].
 	SendTransferDownloadRequest(oid string, size int64) error
+	// SendTerminateRequest sends an [lfs.TransferRequest] with event
+	// [lfs.TerminateEvent].
+	SendTerminateRequest() error
+}
+
+// ResponseReceiverLFS provides methods for receiving and parsing responses.
+type ResponseReceiverLFS interface {
+	// ReceiveInitResponse receives an [lfs.InitResponse].
+	ReceiveInitResponse() error
 	// ReceiveProgressResponse receives an [lfs.ProgressResponse].
 	ReceiveProgressResponse() error
 	// ReceiveTransferResponse receives an [lfs.TransferResponse].
 	ReceiveTransferResponse(responseTo lfs.Event) error
-	// SendTerminateRequest sends an [lfs.TransferRequest] with event
-	// [lfs.TerminateEvent].
-	SendTerminateRequest() error
 }
 
 // NewReverseCommunicatorLFS initializes a [ReverseCommunicatorLFS].
