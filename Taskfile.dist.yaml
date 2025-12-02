@@ -24,7 +24,6 @@ tasks:
     cmds:
       - dagger -c 'test | coverage-tree-map -- $(test | coverage) | export -- coverage-treemap.svg'
 
-# TODO: put anybadge into dagger and create single dagger call, exporting a directory
   coverage-docs:
     desc: "Generate code coverage badge and treemap for README.md docs."
     cmds:
