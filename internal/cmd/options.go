@@ -11,18 +11,6 @@ import (
 	"github.com/act3-ai/gnoci/pkg/protocol/git/comms"
 )
 
-// https://git-scm.com/docs/gitremote-helpers#_options
-const (
-	Option          Command = "option"
-	OptionVerbosity Command = "verbosity"
-)
-
-// Options defines all supported option subcommands.
-var Options = []Command{
-	Option,
-	OptionVerbosity,
-}
-
 // HandleOption executes an option command.
 func HandleOption(ctx context.Context, comm comms.Communicator) error {
 	req, err := comm.ParseOptionRequest()
