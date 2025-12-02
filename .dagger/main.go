@@ -25,6 +25,7 @@ type Gnoci struct {
 
 func New(
 	// GitHub token
+	// +optional
 	token *dagger.Secret,
 ) *Gnoci {
 	return &Gnoci{
