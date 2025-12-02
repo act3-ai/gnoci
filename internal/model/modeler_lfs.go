@@ -105,9 +105,8 @@ type FetchLFSOptions struct {
 func (m *model) FetchLFSLayer(ctx context.Context, dgst digest.Digest, opts *FetchLFSOptions) (io.ReadCloser, error) {
 	slog.DebugContext(ctx, "fetching LFS file", slog.String("digest", dgst.String()))
 
-	for i := len(m.lfsMan.Layers) - 1; i == 0; i-- {
-		if m.lfsMan.Layers[i].Digest == dgst {
-
+	for i := len(m.lfsMan.Layers) - 1; i >= 0; i-- {
+		if m.lfsMan.Layers[i].Digest.String() == dgst.String() {
 			rc, err := m.gt.Fetch(ctx, m.lfsMan.Layers[i])
 			if err != nil {
 				return nil, fmt.Errorf("fetching layer: %w", err)

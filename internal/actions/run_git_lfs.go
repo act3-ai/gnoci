@@ -200,7 +200,7 @@ func (action *GitLFS) downloadLFSLayer(ctx context.Context, transferReq *lfs.Tra
 	}
 
 	// TODO: convenient that LFS uses sha256 by default, but are other digest methods out there?
-	rc, err := remote.FetchLFSLayer(ctx, digest.Digest(transferReq.Oid), fetchOpts)
+	rc, err := remote.FetchLFSLayer(ctx, digest.NewDigestFromEncoded(digest.SHA256, transferReq.Oid), fetchOpts)
 	if err != nil {
 		return "", fmt.Errorf("fetching LFS file: %w", err)
 	}
