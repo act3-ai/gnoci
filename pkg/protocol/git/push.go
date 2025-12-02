@@ -17,15 +17,6 @@ type PushRequest struct {
 	Remote plumbing.ReferenceName
 }
 
-// String condenses [PushRequest] into a string, the raw request received from Git.
-func (r *PushRequest) String() string {
-	if r.Force {
-		return fmt.Sprintf("%s +%s:%s", r.Cmd, r.Src, r.Remote)
-	}
-	return fmt.Sprintf("%s %s:%s", r.Cmd, r.Src, r.Remote)
-
-}
-
 // Parse decodes request fields ensuring the [PushRequest] is of the correct type, is supported,
 // and has a valid value.
 //
@@ -39,6 +30,7 @@ func (r *PushRequest) Parse(fields []string) error {
 	if cmd != Push {
 		return fmt.Errorf("%w: got %s, want %s", ErrUnexpectedRequest, cmd, Push)
 	}
+	r.Cmd = Push
 
 	pair := fields[1]
 	s := strings.Split(pair, ":")
@@ -56,6 +48,14 @@ func (r *PushRequest) Parse(fields []string) error {
 	r.Remote = plumbing.ReferenceName(remote)
 
 	return nil
+}
+
+// String condenses [PushRequest] into a string, the raw request received from Git.
+func (r *PushRequest) String() string {
+	if r.Force {
+		return fmt.Sprintf("%s +%s:%s", r.Cmd, r.Src, r.Remote)
+	}
+	return fmt.Sprintf("%s %s:%s", r.Cmd, r.Src, r.Remote)
 }
 
 // PushResponse is a status indicating if a push request was handled successfully.
