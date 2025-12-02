@@ -253,11 +253,11 @@ func (c *reverseCommunicator) ReceivePushResponseBatch() error {
 				return fmt.Errorf("malformed PushResponse ok status: %s", line)
 			}
 		case "error":
-			if len(fields) != 3 {
+			if len(fields) < 3 {
 				return fmt.Errorf("malformed PushResponse error status: %s", line)
 			}
 		default:
-			return nil
+			return fmt.Errorf("malformed Push Response: %s", line)
 		}
 	}
 
