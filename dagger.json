@@ -7,33 +7,28 @@
   "dependencies": [
     {
       "name": "alpine",
-      "source": "github.com/dagger/dagger/modules/alpine@v0.19.4",
-      "pin": "f76b1d49fbc0fbdfaf9e95b5fe744cebec1e1ea9"
+      "source": "github.com/dagger/dagger/modules/alpine@v0.19.7",
+      "pin": "81fe990dd3cd47ae45dd91ba680f8854aa56aa66"
     },
     {
       "name": "git-cliff",
-      "source": "github.com/act3-ai/dagger/git-cliff@git-cliff/v0.1.2",
-      "pin": "86ec5dc4ee1fd4d168d51946bc82aa4110cc8d96"
+      "source": "github.com/act3-ai/dagger/git-cliff@git-cliff/v0.2.4",
+      "pin": "73309fb3fdc6cc5e872e3e42b4c768fd5f29fa60"
     },
     {
       "name": "go",
-      "source": "github.com/sagikazarmark/daggerverse/go@go/v0.9.0",
-      "pin": "d9ba06776c4c1ccf6f329bd862b9b439c4582ab6"
+      "source": "github.com/sagikazarmark/daggerverse/go@6133ad18e131b891d4723b8e25d69f5de077b472",
+      "pin": "6133ad18e131b891d4723b8e25d69f5de077b472"
     },
     {
       "name": "golangci-lint",
-      "source": "github.com/sagikazarmark/daggerverse/golangci-lint@golangci-lint/v0.9.0",
-      "pin": "e6c14178bcaaff9e102e2a89173ca31479b80629"
-    },
-    {
-      "name": "goreleaser",
-      "source": "github.com/act3-ai/dagger/goreleaser@goreleaser/v0.1.3",
-      "pin": "8d3e75d5a1eb8ff0a96afe2ee29dfaec6227bcf5"
+      "source": "github.com/sagikazarmark/daggerverse/golangci-lint@6133ad18e131b891d4723b8e25d69f5de077b472",
+      "pin": "6133ad18e131b891d4723b8e25d69f5de077b472"
     },
     {
       "name": "govulncheck",
-      "source": "github.com/act3-ai/dagger/govulncheck@govulncheck/v0.1.1",
-      "pin": "5579aa8f127350d77c970c98784f40f56d279fbd"
+      "source": "github.com/act3-ai/dagger/govulncheck@govulncheck/v0.2.0",
+      "pin": "9bb9bba95388624a82218606c8b416133b78d649"
     },
     {
       "name": "python",
@@ -42,13 +37,13 @@
     },
     {
       "name": "release",
-      "source": "github.com/act3-ai/dagger/release@release/v0.1.9",
-      "pin": "33748b33d71e31975d7297922fd2267341fae06d"
+      "source": "github.com/act3-ai/dagger/release@release/v0.3.4",
+      "pin": "aa21042c942b237a09f5eb6d821a56bb631427f9"
     },
     {
       "name": "shellcheck",
-      "source": "github.com/dagger/dagger/modules/shellcheck@v0.18.17",
-      "pin": "1828f0be7b67d0475993f49a9c8b5a3e54877daf"
+      "source": "github.com/dagger/dagger/modules/shellcheck@v0.19.7",
+      "pin": "81fe990dd3cd47ae45dd91ba680f8854aa56aa66"
     }
   ],
   "source": ".dagger",

@@ -4,7 +4,6 @@ import (
 	"context"
 	"dagger/gnoci/internal/dagger"
 	"path/filepath"
-	"strings"
 )
 
 // Run tests.
@@ -20,8 +19,10 @@ type Test struct {
 }
 
 // Run all tests.
-func (t *Test) All(ctx context.Context) (string, error) {
-	unitResults, unitErr := t.Unit(ctx)
+func (t *Test) All(ctx context.Context,
+	src *dagger.Directory,
+) (string, error) {
+	unitResults, unitErr := t.Unit(ctx, src)
 
 	// TODO: add functional  tests here
 
@@ -31,67 +32,74 @@ func (t *Test) All(ctx context.Context) (string, error) {
 }
 
 // Run unit tests.
-func (t *Test) Unit(ctx context.Context) (string, error) {
+func (t *Test) Unit(ctx context.Context,
+	src *dagger.Directory,
+) (string, error) {
 	return dag.Go(). //nolint:wrapcheck
-				WithSource(t.Source).
+				WithSource(src).
 				Container().
 				WithExec([]string{"go", "test", "./..."}).
 				Stdout(ctx)
 }
 
 // Push pushes a git repository to an OCI registry.
-func (t *Test) Push(ctx context.Context,
-	// Git reference to test repository
-	gitRef *dagger.GitRef,
-) (string, error) {
-	// start registry
-	regService := registryService()
-	regService, err := regService.Start(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer regService.Stop(ctx)
+//
+//nolint:wrapcheck
+// func (t *Test) Push(ctx context.Context,
+// 	// Git reference to test repository
+// 	gitRef *dagger.GitRef,
+// ) (string, error) {
+// 	// start registry
+// 	regService := registryService()
+// 	regService, err := regService.Start(ctx)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer regService.Stop(ctx) //nolint:errcheck
 
-	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
-	if err != nil {
-		return "", err
-	}
-	regHost := strings.TrimPrefix(regEndpoint, "http://")
+// 	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	regHost := strings.TrimPrefix(regEndpoint, "http://")
 
-	const srcDir = "src"
-	return t.containerWithHelpers(ctx).
-		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
-		WithWorkdir(srcDir).
-		WithServiceBinding("registry", regService).
-		With(configureLFSOCIFunc(regHost)).
-		WithExec([]string{"git", "push", "oci://" + regHost + "/repo/test:sync", "--all"}).
-		Stdout(ctx)
+// 	const srcDir = "src"
+// 	return t.containerWithHelpers(ctx, gitRef.Tree()).
+// 		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
+// 		WithWorkdir(srcDir).
+// 		WithServiceBinding("registry", regService).
+// 		With(configureLFSOCIFunc(regHost)).
+// 		WithExec([]string{"git", "push", "oci://" + regHost + "/repo/test:sync", "--all"}).
+// 		Stdout(ctx)
 
-	// configure git
+// 	// configure git
 
-	// configure git-lfs
+// 	// configure git-lfs
 
-	// connect to registry
+// 	// connect to registry
 
-	// push
+// 	// push
 
-	// get metadata
+// 	// get metadata
 
-	// return metadata on stdout
+// 	// return metadata on stdout
 
-	// return "", fmt.Errorf("not implemented")
-}
+// 	// return "", fmt.Errorf("not implemented")
+// }
 
 // containerWithHelpers creates a container with the dependencies necessary to test
 // git-remote-oci and git-lfs-remote-oci.
-func (t *Test) containerWithHelpers(ctx context.Context) *dagger.Container {
+func (t *Test) containerWithHelpers(ctx context.Context,
+	// Source code directory
+	// +defaultPath="/"
+	src *dagger.Directory) *dagger.Container {
 	platform := dagger.Platform("linux/amd64")
 	version := "test-dev"
 
 	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git", "git-lfs"}}).
 		Container().
-		WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, version, platform)).
-		WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, version, platform)).
+		WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, src, version, platform)).
+		WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, src, version, platform)).
 		WithExec([]string{"git", "config", "--global", "user.name", "dev-test"}).
 		WithExec([]string{"git", "config", "--global", "user.email", "devtest@example.com"}).
 		WithExec([]string{"git", "config", "--global", "init.defaultbranch", "main"})

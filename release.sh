@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
 
-# For custom changes, see https://daggerverse.dev/mod/github.com/act3-ai/dagger/release for dagger release module usage.
-
-# Custom Variables
-version_path="VERSION"
-changelog_path="CHANGELOG.md"
-notes_dir="releases"
-
-
-# Dagger module dependencies, see dagger.json for versions
-mod_release="release"
-mod_gitcliff="git-cliff"
-
 help() {
     cat <<EOF
 
@@ -19,7 +7,7 @@ Name:
     release.sh - Run a release process in stages.
 
 Usage:
-    release.sh COMMAND [-f | --force] [-i | --interactive] [-s | --silent]  [--version VERSION] [-h | --help]
+    release.sh COMMAND [-i | --interactive] [-s | --silent]  [--version VERSION] [-h | --help]
 
 Commands:
     prepare - prepare a release locally by running linters, tests, and producing the changelog, notes, assets, etc.
@@ -66,7 +54,7 @@ set -euo pipefail
 
 # Defaults. Overriden by flag equivalents, when applicable.
 cmd=""
-force="${FORCE:-false}"       # skip git status checks
+# force="${FORCE:-false}"       # skip git status checks
 interactive="${INTERACTIVE:-false}" # interactive mode
 silent="${SILENT:-false}"      # silence dagger (dagger --silent)
 explicit_version="${VERSION:-""}"  # release for a specific version
@@ -96,10 +84,10 @@ while [[ $# -gt 0 ]]; do
        silent=true
        shift
        ;;
-    "-f" | "--force")
-       force=true
-       shift
-       ;;
+    # "-f" | "--force")
+    #    force=true
+    #    shift
+    #    ;;
     *)
        echo "Unknown option: $1"
        help
@@ -135,59 +123,23 @@ prompt_continue() {
     esac
 }
 
-# check_upstream ensures remote upstream matches local commit.
-# Inputs:
-#  - $1 : commit, often HEAD or HEAD~1
-check_upstream() {
-    if [ "$force" != "true" ]; then
-        echo "Comparing local $1 to remote upstream"
-        git diff "@{upstream}" "$1" --stat --exit-code
-    fi
-}
-
 # prepare runs linters and unit tests, bumps the version, and generates the changelog.
 # runs 'approve' if interactive mode is enabled.
 prepare() {
     echo "Running prepare stage..."
 
-    old_version=v$(cat "$version_path")
-    
-    # linters and unit tests
-    if [ "$force" != "true" ]; then
-        dagger -m="$mod_release" -s="$silent" --src="." call \
-            go check
-    fi
-    git fetch --tags
-    check_upstream "HEAD"
-
-    # bump version, generate changelogs
-    vVersion=""
-    if [ "$explicit_version" != "" ]; then
-        vVersion="$explicit_version"
-    else
-        vVersion=$(dagger -m="$mod_gitcliff" -s="$silent" --src="." call bumped-version)
+    # use given version if provided
+    local args=()
+    if [[ -n "$explicit_version" ]]; then
+        args+=("--version" "$explicit_version")
     fi
 
-    # verify release version with gorelease
-    if [ "$force" != "true" ]; then
-        dagger -m="$mod_release" -s="$silent" --src="." call \
-            go verify --target-version="$vVersion" --current-version="$old_version"
-    fi
-
-    dagger -m="$mod_release" -s="$silent" --src="." call \
-        prepare \
-        --ignore-error="$force" \
-        --version="$vVersion" \
-        --version-path="$version_path" \
-        --changelog-path="$changelog_path" \
-        export --path="."
-
-    # TODO: generage coverage badges
+    dagger -s="$silent" call release-prepare --git-ref=. "${args[@]}"
 
     echo "Successfully ran prepare stage."
-    echo "Please review the local changes, especially releases/$vVersion.md"
+    echo "Please review the local changes."
     if [ "$interactive" = "true" ] && [ "$(prompt_continue "approve")" = "true" ]; then
-            approve
+        approve
     fi
 }
 
@@ -197,23 +149,28 @@ approve() {
     echo "Running approve stage..."
 
     git fetch --tags
-    check_upstream "HEAD"
+    
+    local version
+    version=$(<VERSION)
 
-    vVersion=v$(cat "$version_path")
-    notesPath="${notes_dir}/${vVersion}.md"
+    changed_files+=(
+        VERSION
+        CHANGELOG.md
+        "releases/v${version}.md"
+        "docs/figures/badges/coverage/*"
+    )
 
     # stage release material
-    git add "$version_path" "$changelog_path" "$notesPath"
-    git add \*.md
+    git add "${changed_files[@]}"
     
     # signed commit
-    git commit -S -m "chore(release): prepare for $vVersion"
+    git commit -S -m "chore(release): prepare for v$version"
     # annotated and signed tag
-    git tag -s -a -m "Official release $vVersion" "$vVersion"
+    git tag -s -a -m "Official release v$version" v"$version"
 
     echo -e "Successfully ran approve stage.\n"
     if [ "$interactive" = "true" ] && [ "$(prompt_continue "publish")" = "true" ]; then
-            publish
+        publish
     fi
 }
 
@@ -222,21 +179,11 @@ publish() {
     echo "Running publish stage..."
 
     git fetch --tags
-    check_upstream "HEAD~1" # compare before our release commit, we should only fast forwarding that commit
 
     # push this branch and the associated tags
     git push --follow-tags
 
-    vVersion=v$(cat "$version_path")
-    release_notes_path="${notes_dir}/${vVersion}.md"
-
-    dagger -m="$mod_release" -s="$silent" --src="." call \
-        create-github \
-        --host="https://github.com" \
-        --repo="act3-ai/gnoci" \
-        --version="$vVersion" \
-        --notes="$release_notes_path" \
-        --token=env:GITHUB_API_TOKEN
+    dagger -s="$silent" call release-publish --git-ref=.
 
     echo  "Successfully ran publish stage."
     echo "Release process complete."
