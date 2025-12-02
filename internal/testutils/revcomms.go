@@ -82,6 +82,13 @@ func (c *reverseCommunicator) SendOptionRequest(opt git.Option, value string) er
 		Value: value,
 	}
 
+	if opt == "" {
+		return fmt.Errorf("empty option type: %s", opt)
+	}
+	if value == "" {
+		return fmt.Errorf("empty option value: %s", value)
+	}
+
 	_, err := c.out.Write([]byte(req.String() + "\n"))
 	if err != nil {
 		return fmt.Errorf("writing OptionRequest: %w", err)
