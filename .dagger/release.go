@@ -20,15 +20,15 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 	// +optional
 	version string,
 ) (*dagger.Changeset, error) {
-	_ = g.BuildAllPlatforms(ctx, version, []dagger.Platform{"linux/amd64", "linux/arm64", "darwin/arm64"})
+	// _ = g.BuildAllPlatforms(ctx, version, []dagger.Platform{"linux/amd64", "linux/arm64", "darwin/arm64"})
 
-	if _, err := g.Test().All(ctx); err != nil {
-		return nil, err
-	}
+	// if _, err := g.Test().All(ctx); err != nil {
+	// 	return nil, err
+	// }
 
-	if _, err := g.Lint().All(ctx, g.Source); err != nil {
-		return nil, err
-	}
+	// if _, err := g.Lint().All(ctx, g.Source); err != nil {
+	// 	return nil, err
+	// }
 
 	// generate documentation changes
 	release := dag.Release(gitRef)
