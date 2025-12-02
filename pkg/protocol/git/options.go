@@ -15,6 +15,15 @@ const (
 	Verbosity Option = "verbosity"
 )
 
+const (
+	// OptionSupported is a response to an [OptionRequest] indicating
+	// the option is supported.
+	OptionSupported string = "ok"
+	// OptionNotSupported is a response to an [OptionRequest] indicating
+	// the option is not supported.
+	OptionNotSupported string = "unsupported"
+)
+
 // OptionRequest is a command received from Git requesting an option to be set.
 //
 // https://git-scm.com/docs/gitremote-helpers#Documentation/gitremote-helpers.txt-optionnamevalue.
