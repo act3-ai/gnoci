@@ -20,13 +20,15 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 	// +optional
 	version string,
 ) (*dagger.Changeset, error) {
-	_ = g.BuildAllPlatforms(ctx, version, []dagger.Platform{"linux/amd64", "linux/arm64", "darwin/arm64"})
+	src := gitRef.Tree()
 
-	if _, err := g.Test().All(ctx); err != nil {
+	_ = g.BuildAllPlatforms(ctx, src, version, []dagger.Platform{"linux/amd64", "linux/arm64", "darwin/arm64"})
+
+	if _, err := g.Test().All(ctx, src); err != nil {
 		return nil, err
 	}
 
-	if _, err := g.Lint().All(ctx, g.Source); err != nil {
+	if _, err := g.Lint().All(ctx, src); err != nil {
 		return nil, err
 	}
 
@@ -40,14 +42,9 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 		version = v
 	}
 
-	src := gitRef.Tree()
 	src = src.WithChanges(release.Prepare(version))
 	src = src.WithChanges(g.Generate(src))
-
-	coverageDocs := g.Test().
-		CoverageDocs(ctx).
-		Directory(coverageDocsDir)
-	src = src.WithDirectory(coverageDocsDir, coverageDocs)
+	src = src.WithChanges(g.Test().CoverageDocs(ctx, src))
 
 	return src.Changes(gitRef.Tree()), nil
 }

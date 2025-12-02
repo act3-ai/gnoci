@@ -19,22 +19,15 @@ import (
 )
 
 type Gnoci struct {
-	// source code directory
-	Source *dagger.Directory
 	// +private
 	Token *dagger.Secret
 }
 
 func New(
-	// top level source code directory
-	// +defaultPath="/"
-	// +ignore=["**/*.log", ".vscode/*", "*.private", "bin/*", "releases/*"]
-	src *dagger.Directory,
 	// GitHub token
 	token *dagger.Secret,
 ) *Gnoci {
 	return &Gnoci{
-		Source: src,
-		Token:  token,
+		Token: token,
 	}
 }

@@ -19,6 +19,9 @@ const (
 
 // Build an git-remote-oci executable.
 func (g *Gnoci) BuildGit(ctx context.Context,
+	// Source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
 	// Build version
 	// +optional
 	version string,
@@ -27,7 +30,7 @@ func (g *Gnoci) BuildGit(ctx context.Context,
 	// +default="linux/amd64"
 	platform dagger.Platform,
 ) *dagger.File {
-	src := g.dirFilterGo(g.Source)
+	src = g.dirFilterGo(src)
 
 	ldflags := []string{"-s", "-w", `-extldflags "-static"`}
 	if version != "" {
@@ -45,6 +48,9 @@ func (g *Gnoci) BuildGit(ctx context.Context,
 
 // Build an git-lfs-remote-oci executable.
 func (g *Gnoci) BuildGitLFS(ctx context.Context,
+	// Source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
 	// Build version
 	// +optional
 	version string,
@@ -53,7 +59,7 @@ func (g *Gnoci) BuildGitLFS(ctx context.Context,
 	// +default="linux/amd64"
 	platform dagger.Platform,
 ) *dagger.File {
-	src := g.dirFilterGo(g.Source)
+	src = g.dirFilterGo(src)
 
 	ldflags := []string{"-s", "-w", `-extldflags "-static"`}
 	if version != "" {
@@ -72,6 +78,9 @@ func (g *Gnoci) BuildGitLFS(ctx context.Context,
 // Build git-remote-oci binaries for multiple platforms, nested in directories
 // named by platform.
 func (g *Gnoci) BuildGitPlatforms(ctx context.Context,
+	// Source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
 	// Build version
 	// +optional
 	version string,
@@ -89,7 +98,7 @@ func (g *Gnoci) BuildGitPlatforms(ctx context.Context,
 			ctx, span := Tracer().Start(ctx, fmt.Sprintf("Build git-remote-oci for %s", platform))
 			defer span.End()
 
-			bin := g.BuildGit(ctx, version, platform)
+			bin := g.BuildGit(ctx, src, version, platform)
 
 			mux.Lock()
 			defer mux.Unlock()
@@ -108,6 +117,9 @@ func (g *Gnoci) BuildGitPlatforms(ctx context.Context,
 // Build git-lfs-remote-oci binaries for multiple platforms, nested in directories
 // named by platform.
 func (g *Gnoci) BuildGitLFSPlatforms(ctx context.Context,
+	// Source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
 	// Build version
 	// +optional
 	version string,
@@ -125,7 +137,7 @@ func (g *Gnoci) BuildGitLFSPlatforms(ctx context.Context,
 			ctx, span := Tracer().Start(ctx, fmt.Sprintf("Build git-lfs-remote-oci for %s", platform))
 			defer span.End()
 
-			bin := g.BuildGitLFS(ctx, version, platform)
+			bin := g.BuildGitLFS(ctx, src, version, platform)
 
 			mux.Lock()
 			defer mux.Unlock()
@@ -144,6 +156,9 @@ func (g *Gnoci) BuildGitLFSPlatforms(ctx context.Context,
 // Build a git-remote-oci and git-lfs-remote-oci binaries for multiple platforms,
 // nested in directories named by platform
 func (g *Gnoci) BuildAllPlatforms(ctx context.Context,
+	// Source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
 	// Build version
 	// +optional
 	version string,
@@ -164,7 +179,7 @@ func (g *Gnoci) BuildAllPlatforms(ctx context.Context,
 			buildCtx, span := Tracer().Start(ctx, fmt.Sprintf("Build git-remote-oci for %s", platform))
 			defer span.End()
 
-			bin := g.BuildGit(buildCtx, version, platform)
+			bin := g.BuildGit(buildCtx, src, version, platform)
 
 			mux.Lock()
 			defer mux.Unlock()
@@ -179,7 +194,7 @@ func (g *Gnoci) BuildAllPlatforms(ctx context.Context,
 			buildCtx, span := Tracer().Start(ctx, fmt.Sprintf("Build git-lfs-remote-oci for %s", platform))
 			defer span.End()
 
-			bin := g.BuildGitLFS(buildCtx, version, platform)
+			bin := g.BuildGitLFS(buildCtx, src, version, platform)
 
 			mux.Lock()
 			defer mux.Unlock()

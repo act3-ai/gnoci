@@ -20,8 +20,10 @@ type Test struct {
 }
 
 // Run all tests.
-func (t *Test) All(ctx context.Context) (string, error) {
-	unitResults, unitErr := t.Unit(ctx)
+func (t *Test) All(ctx context.Context,
+	src *dagger.Directory,
+) (string, error) {
+	unitResults, unitErr := t.Unit(ctx, src)
 
 	// TODO: add functional  tests here
 
@@ -31,9 +33,11 @@ func (t *Test) All(ctx context.Context) (string, error) {
 }
 
 // Run unit tests.
-func (t *Test) Unit(ctx context.Context) (string, error) {
+func (t *Test) Unit(ctx context.Context,
+	src *dagger.Directory,
+) (string, error) {
 	return dag.Go(). //nolint:wrapcheck
-				WithSource(t.Source).
+				WithSource(src).
 				Container().
 				WithExec([]string{"go", "test", "./..."}).
 				Stdout(ctx)
@@ -61,7 +65,7 @@ func (t *Test) Push(ctx context.Context,
 	regHost := strings.TrimPrefix(regEndpoint, "http://")
 
 	const srcDir = "src"
-	return t.containerWithHelpers(ctx).
+	return t.containerWithHelpers(ctx, gitRef.Tree()).
 		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
 		WithWorkdir(srcDir).
 		WithServiceBinding("registry", regService).
@@ -86,14 +90,17 @@ func (t *Test) Push(ctx context.Context,
 
 // containerWithHelpers creates a container with the dependencies necessary to test
 // git-remote-oci and git-lfs-remote-oci.
-func (t *Test) containerWithHelpers(ctx context.Context) *dagger.Container {
+func (t *Test) containerWithHelpers(ctx context.Context,
+	// Source code directory
+	// +defaultPath="/"
+	src *dagger.Directory) *dagger.Container {
 	platform := dagger.Platform("linux/amd64")
 	version := "test-dev"
 
 	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git", "git-lfs"}}).
 		Container().
-		WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, version, platform)).
-		WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, version, platform)).
+		WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, src, version, platform)).
+		WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, src, version, platform)).
 		WithExec([]string{"git", "config", "--global", "user.name", "dev-test"}).
 		WithExec([]string{"git", "config", "--global", "user.email", "devtest@example.com"}).
 		WithExec([]string{"git", "config", "--global", "init.defaultbranch", "main"})
