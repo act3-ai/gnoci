@@ -8,27 +8,14 @@ tasks:
     env:
       GNOCI_BUILD_PATH: bin/git-remote-oci
     cmds:
-      - dagger call build-git export --path {{ .GNOCI_GIT_BUILD_PATH }}
+      - dagger call build-git --src=. export --path {{ .GNOCI_GIT_BUILD_PATH }}
 
   build-git-lfs:
     desc: "Build from source."
     env:
       GNOCI_BUILD_PATH: bin/git-lfs-remote-oci
     cmds:
-      - dagger call build-git-lfs export --path {{ .GNOCI_GIT_LFS_BUILD_PATH }}
-
-  coverage:
-    desc: "Generage code coverage treemap, a visual aid."
-    env:
-      OUTPUT: coverage-treemap.svg
-    cmds:
-      - dagger -c 'test | coverage-tree-map -- $(test | coverage) | export -- coverage-treemap.svg'
-
-  coverage-docs:
-    desc: "Generate code coverage badge and treemap for README.md docs."
-    cmds:
-      - |
-        dagger -c 'test | coverage-docs | export -- docs/figures/badges/coverage/'
+      - dagger call build-git-lfs --src=. export --path {{ .GNOCI_GIT_LFS_BUILD_PATH }}
 
   go-generate:
     desc: "Run go generate."
