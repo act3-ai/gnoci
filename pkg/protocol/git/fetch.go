@@ -33,8 +33,8 @@ func (r *FetchRequest) Parse(fields []string) error {
 		return fmt.Errorf("%w: got %s, want %s", ErrUnexpectedRequest, cmd, Fetch)
 	}
 
-	hash := fields[0]
-	name := fields[1]
+	hash := fields[1]
+	name := fields[2]
 	r.Ref = plumbing.NewHashReference(
 		plumbing.ReferenceName(name),
 		plumbing.NewHash(hash),
