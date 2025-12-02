@@ -251,14 +251,9 @@ func (c *defaultCommunicator) WriteCapabilitiesResponse(capabilities []git.Capab
 
 // WriteOptionResponse indicates if an option in a [git.OptionRequest] is supported.
 func (c *defaultCommunicator) WriteOptionResponse(supported bool) error {
-	const (
-		optionSupported   string = "ok"
-		optionNotSupportd string = "unsupported"
-	)
-
-	line := optionNotSupportd
+	line := git.OptionNotSupported
 	if supported {
-		line = optionSupported
+		line = git.OptionSupported
 	}
 
 	if _, err := fmt.Fprintln(c.out, line); err != nil {
