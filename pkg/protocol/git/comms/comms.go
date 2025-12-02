@@ -47,10 +47,10 @@ type ResponseWriter interface {
 	WriteOptionResponse(supported bool) error
 	// WriteListResponse lists Git references and their commits. The response to
 	// a [git.ListRequest].
-	WriteListResponse(resps []*git.ListResponse) error
+	WriteListResponse(resps []git.ListResponse) error
 	// WritePushResponse lists the results of push actions. The response to one
 	// or more [git.PushRequest]s.
-	WritePushResponse(resp []*git.PushResponse) error
+	WritePushResponse(resp []git.PushResponse) error
 	// WriteFetchResponse indicates fetching has completed. The response to one
 	// or more [git.FetchRequest]s.
 	WriteFetchResponse() error
@@ -77,20 +77,15 @@ func NewCommunicator(in io.Reader, out io.Writer) Communicator {
 // command is expected. The request is saved and is included in a subsequent
 // method call.
 func (c *defaultCommunicator) LookAhead() (git.Command, error) {
-	line, err := c.readLine()
+	fields, err := c.next()
 	if err != nil {
 		return "", err
 	}
+	c.previous = fields
 
-	req := strings.Fields(line)
-	if len(req) < 1 {
-		return "", git.ErrEmptyRequest
-	}
-	c.previous = req
-
-	cmd := git.Command(req[0])
+	cmd := git.Command(fields[0])
 	if !git.SupportedCommand(cmd) {
-		return "", fmt.Errorf("%w: %s", git.ErrUnsupportedRequest, req[0])
+		return "", fmt.Errorf("%w: %s", git.ErrUnsupportedRequest, fields[0])
 	}
 
 	return cmd, nil
@@ -112,6 +107,7 @@ func (c *defaultCommunicator) next() ([]string, error) {
 		return nil, err
 	}
 
+	// sanity, if no fields [git.ErrEndOfInput] should be thrown
 	fields := strings.Fields(line)
 	if len(fields) < 1 {
 		return nil, git.ErrEmptyRequest
@@ -128,12 +124,12 @@ func (c *defaultCommunicator) ParseCapabilitiesRequest() (*git.CapabilitiesReque
 		return nil, err
 	}
 
-	var req *git.CapabilitiesRequest
+	var req git.CapabilitiesRequest
 	if err := req.Parse(fields); err != nil {
 		return nil, fmt.Errorf("parsing capabilities request: %w", err)
 	}
 
-	return req, nil
+	return &req, nil
 }
 
 // ParseOptionRequest parses the next request as a [git.OptionRequest].
@@ -144,12 +140,12 @@ func (c *defaultCommunicator) ParseOptionRequest() (*git.OptionRequest, error) {
 		return nil, err
 	}
 
-	var req *git.OptionRequest
+	var req git.OptionRequest
 	if err := req.Parse(fields); err != nil {
 		return nil, fmt.Errorf("parsing option request: %w", err)
 	}
 
-	return req, nil
+	return &req, nil
 }
 
 // ParseListRequest parses the next request as a [git.ListRequest].
@@ -160,16 +156,17 @@ func (c *defaultCommunicator) ParseListRequest() (*git.ListRequest, error) {
 		return nil, err
 	}
 
-	var req *git.ListRequest
+	var req git.ListRequest
 	if err := req.Parse(fields); err != nil {
 		return nil, fmt.Errorf("parsing capabilities request: %w", err)
 	}
 
-	return req, nil
+	return &req, nil
 }
 
 // ParseFetchRequestBatch parses a batch of [git.FetchRequest]s.
-func (c *defaultCommunicator) ParseFetchRequestBatch() ([]git.FetchRequest, error) {
+func (c *defaultCommunicator) ParseFetchRequestBatch() ([]git.FetchRequest, error) { //nolint:dupl
+	// TODO: consider building generic for internals for here and push.
 	defer func() { c.previous = nil }()
 
 	// if lookahead was used, include in batch
@@ -179,13 +176,19 @@ func (c *defaultCommunicator) ParseFetchRequestBatch() ([]git.FetchRequest, erro
 		if err := req.Parse(c.previous); err != nil {
 			return nil, err
 		}
+		reqs = append(reqs, req)
 	}
 
 	// ingest batch
+	var batchSize int
 	for {
+		batchSize++
 		fields, err := c.next()
 		switch {
 		case errors.Is(err, git.ErrEmptyRequest):
+			if batchSize == 1 {
+				return nil, fmt.Errorf("received empty fetch request batch")
+			}
 			// batch complete
 			return reqs, nil
 		case err != nil:
@@ -201,7 +204,7 @@ func (c *defaultCommunicator) ParseFetchRequestBatch() ([]git.FetchRequest, erro
 }
 
 // ParsePushRequestBatch parses a batch of [git.PushRequest]s.
-func (c *defaultCommunicator) ParsePushRequestBatch() ([]git.PushRequest, error) {
+func (c *defaultCommunicator) ParsePushRequestBatch() ([]git.PushRequest, error) { //nolint:dupl
 	defer func() { c.previous = nil }()
 
 	// if lookahead was used, include in batch
@@ -211,13 +214,19 @@ func (c *defaultCommunicator) ParsePushRequestBatch() ([]git.PushRequest, error)
 		if err := req.Parse(c.previous); err != nil {
 			return nil, err
 		}
+		reqs = append(reqs, req)
 	}
 
 	// ingest batch
+	var batchSize int
 	for {
+		batchSize++
 		fields, err := c.next()
 		switch {
 		case errors.Is(err, git.ErrEmptyRequest):
+			if batchSize == 1 {
+				return nil, fmt.Errorf("received empty fetch request batch")
+			}
 			// batch complete
 			return reqs, nil
 		case err != nil:
@@ -264,7 +273,7 @@ func (c *defaultCommunicator) WriteOptionResponse(supported bool) error {
 
 // WriteListResponse lists Git references and their commits. The response to
 // a [git.ListRequest].
-func (c *defaultCommunicator) WriteListResponse(resps []*git.ListResponse) error {
+func (c *defaultCommunicator) WriteListResponse(resps []git.ListResponse) error {
 	for _, resp := range resps {
 		if _, err := fmt.Fprintln(c.out, resp.String()); err != nil {
 			return fmt.Errorf("writing list response: %w", err)
@@ -281,7 +290,7 @@ func (c *defaultCommunicator) WriteListResponse(resps []*git.ListResponse) error
 
 // WritePushResponse lists the results of push actions. The response to one
 // or more [git.PushRequest]s.
-func (c *defaultCommunicator) WritePushResponse(resps []*git.PushResponse) error {
+func (c *defaultCommunicator) WritePushResponse(resps []git.PushResponse) error {
 	for _, resp := range resps {
 		if _, err := fmt.Fprintln(c.out, resp.String()); err != nil {
 			return fmt.Errorf("writing push response: %w", err)

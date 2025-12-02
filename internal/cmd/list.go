@@ -37,7 +37,7 @@ func HandleList(ctx context.Context, local git.Repository, remote model.Modeler,
 
 	headRefs := remote.HeadRefs()
 	tagRefs := remote.TagRefs()
-	results := make([]*gittypes.ListResponse, len(headRefs)+len(tagRefs))
+	results := make([]gittypes.ListResponse, len(headRefs)+len(tagRefs))
 
 	// list remote branch references
 	for k, v := range headRefs {
@@ -47,14 +47,14 @@ func HandleList(ctx context.Context, local git.Repository, remote model.Modeler,
 				Reference: plumbing.ReferenceName(fmt.Sprintf("@%s", headRef.Name())),
 				Commit:    "HEAD",
 			}
-			results = append(results, &result)
+			results = append(results, result)
 		}
 
 		result := gittypes.ListResponse{
 			Reference: k,
 			Commit:    v.Commit,
 		}
-		results = append(results, &result)
+		results = append(results, result)
 	}
 
 	// list remote tag references
@@ -63,7 +63,7 @@ func HandleList(ctx context.Context, local git.Repository, remote model.Modeler,
 			Reference: k,
 			Commit:    v.Commit,
 		}
-		results = append(results, &result)
+		results = append(results, result)
 	}
 
 	if err := comm.WriteListResponse(results); err != nil {

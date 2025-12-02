@@ -96,13 +96,13 @@ func HandlePush(ctx context.Context, local git.Repository, localDir string, remo
 // compareRefs compares all references in the set of push cmds between the local
 // and remote repositories, returning a set of new commit hashes, references to
 // commits in the to-be-created packfile, and a list of results to be written to Git.
-func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler, reqs []gittypes.PushRequest) ([]plumbing.Hash, []*plumbing.Reference, []*gittypes.PushResponse) {
+func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler, reqs []gittypes.PushRequest) ([]plumbing.Hash, []*plumbing.Reference, []gittypes.PushResponse) {
 	rc := refcomp.NewCachedRefComparer(local, remote)
 
 	// resolve state of refs in remote
 	newCommitTips := make(map[plumbing.Hash]struct{})
 	refsInNewPack := make([]*plumbing.Reference, 0) // len <= newCommites
-	results := make([]*gittypes.PushResponse, 0, len(reqs))
+	results := make([]gittypes.PushResponse, 0, len(reqs))
 	for _, req := range reqs {
 		rp, err := rc.Compare(ctx, req.Force, req.Src, req.Remote)
 		if errors.Is(err, model.ErrUnsupportedReferenceType) {
@@ -110,7 +110,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 				Remote: req.Remote,
 				Error:  fmt.Errorf("encountered unsupported reference type when comparing local to remote ref: %w", err),
 			}
-			results = append(results, &result)
+			results = append(results, result)
 			continue
 		}
 		if err != nil {
@@ -118,7 +118,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 				Remote: req.Remote,
 				Error:  fmt.Errorf("comparing local ref to remote ref: %w", err),
 			}
-			results = append(results, &result)
+			results = append(results, result)
 			continue
 		}
 
@@ -130,7 +130,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 					Remote: req.Remote,
 					Error:  fmt.Errorf("encountered unsupported reference type when deleting remote ref: %w", err),
 				}
-				results = append(results, &result)
+				results = append(results, result)
 				continue
 			}
 			if err != nil {
@@ -138,7 +138,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 					Remote: req.Remote,
 					Error:  fmt.Errorf("deleting reference from remote: %w", err),
 				}
-				results = append(results, &result)
+				results = append(results, result)
 				continue
 			}
 		case (rp.Status & refcomp.StatusForce) == refcomp.StatusForce:
@@ -151,7 +151,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 				// defer the ref update until we know the packfile layer digest
 				refsInNewPack = append(refsInNewPack, plumbing.NewHashReference(rp.Remote.Name(), rp.Local.Hash()))
 				result := gittypes.PushResponse{Remote: req.Remote}
-				results = append(results, &result)
+				results = append(results, result)
 				continue
 			}
 			// update remote ref's commit to local ref's
@@ -161,7 +161,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 					Remote: req.Remote,
 					Error:  fmt.Errorf("encountered unsupported reference type when updating remote ref: %w", err),
 				}
-				results = append(results, &result)
+				results = append(results, result)
 				continue
 			}
 			if err != nil {
@@ -169,7 +169,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 					Remote: req.Remote,
 					Error:  fmt.Errorf("updating remote reference: %w", err),
 				}
-				results = append(results, &result)
+				results = append(results, result)
 				continue
 			}
 		default:
@@ -179,7 +179,7 @@ func compareRefs(ctx context.Context, local git.Repository, remote model.Modeler
 			// without it, the above error hits those cases where we log the skip elsewhere
 		}
 		result := gittypes.PushResponse{Remote: req.Remote}
-		results = append(results, &result)
+		results = append(results, result)
 	}
 
 	dedupNewCommits := make([]plumbing.Hash, 0, len(newCommitTips))
