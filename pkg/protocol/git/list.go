@@ -19,7 +19,7 @@ type ListRequest struct {
 //
 // Implements [Parsable].
 func (r *ListRequest) Parse(fields []string) error {
-	if len(fields) != 1 || len(fields) != 2 {
+	if len(fields) < 1 {
 		return fmt.Errorf("%w: invalid fields for list request: got %v", ErrBadRequest, fields)
 	}
 
@@ -30,7 +30,7 @@ func (r *ListRequest) Parse(fields []string) error {
 	r.Cmd = cmd
 
 	if len(fields) == 2 {
-		if fields[2] != "for-push" {
+		if fields[1] != "for-push" {
 			return fmt.Errorf("%w: invalid option for list request: got %v", ErrBadRequest, fields)
 		}
 		r.ForPush = true
