@@ -420,7 +420,7 @@ func Test_reverseCommunicatorLFS_ReceiveTransferResponse(t *testing.T) {
 			Event: lfs.CompleteEvent,
 			Oid:   "123456789",
 			Path:  "path/foo",
-			Error: lfs.ErrCodeMessage{
+			Error: &lfs.ErrCodeMessage{
 				Code:    1,
 				Message: errors.New("transfer error").Error(),
 			},

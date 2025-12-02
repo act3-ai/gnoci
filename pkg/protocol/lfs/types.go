@@ -156,10 +156,10 @@ func (r *TransferRequest) Validate() error {
 //
 // - https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#downloads
 type TransferResponse struct {
-	Event Event          `json:"event"`
-	Oid   string         `json:"oid"`
-	Path  string         `json:"path,omitempty"` // only included as a response to [DownloadEvent]
-	Error ErrCodeMessage `json:"error,omitempty"`
+	Event Event           `json:"event"`
+	Oid   string          `json:"oid"`
+	Path  string          `json:"path,omitempty"` // only included as a response to [DownloadEvent]
+	Error *ErrCodeMessage `json:"error,omitempty"`
 }
 
 // Validate ensures sufficient information for processing an [TransferRequest].

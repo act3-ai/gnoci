@@ -184,7 +184,7 @@ func (g *reverseCommunicatorLFS) ReceiveTransferResponse(responseTo lfs.Event) e
 		return err
 	}
 
-	if transferResp.Error.Message != "" {
+	if transferResp.Error != nil && transferResp.Error.Message != "" {
 		return fmt.Errorf("received TransferResponse error: code = %d, message = %s", transferResp.Error.Code, transferResp.Error.Message)
 	}
 

@@ -172,7 +172,7 @@ func (c *defaultCommunicator) WriteTransferUploadResponse(ctx context.Context, o
 		Oid:   oid,
 	}
 	if uploadErr != nil {
-		transferResp.Error = lfs.ErrCodeMessage{
+		transferResp.Error = &lfs.ErrCodeMessage{
 			Code:    1,
 			Message: uploadErr.Error(),
 		}
@@ -207,7 +207,7 @@ func (c *defaultCommunicator) WriteTransferDownloadResponse(ctx context.Context,
 		Oid:   oid,
 	}
 	if downloadErr != nil {
-		transferResp.Error = lfs.ErrCodeMessage{
+		transferResp.Error = &lfs.ErrCodeMessage{
 			Code:    1,
 			Message: downloadErr.Error(),
 		}
