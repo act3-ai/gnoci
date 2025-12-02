@@ -43,7 +43,7 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 	}
 
 	src = src.WithChanges(release.Prepare(version))
-	src = src.WithChanges(g.Generate(src))
+	// src = src.WithChanges(g.Generate(src))
 	src = src.WithChanges(g.Test().CoverageDocs(ctx, src))
 
 	return src.Changes(gitRef.Tree()), nil
