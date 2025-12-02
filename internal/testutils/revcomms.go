@@ -2,7 +2,6 @@ package testutils
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -67,12 +66,7 @@ func (c *reverseCommunicator) SendCapabilitiesRequest() error {
 		Cmd: git.Capabilities,
 	}
 
-	reqRaw, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("encoding CapabilitiesRequest: %w", err)
-	}
-
-	_, err = c.out.Write(withNewline(reqRaw))
+	_, err := c.out.Write([]byte(req.String() + "\n"))
 	if err != nil {
 		return fmt.Errorf("writing CapabilitiesRequest: %w", err)
 	}
@@ -88,12 +82,7 @@ func (c *reverseCommunicator) SendOptionRequest(opt git.Option, value string) er
 		Value: value,
 	}
 
-	reqRaw, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("encoding OptionRequest: %w", err)
-	}
-
-	_, err = c.out.Write(withNewline(reqRaw))
+	_, err := c.out.Write([]byte(req.String() + "\n"))
 	if err != nil {
 		return fmt.Errorf("writing OptionRequest: %w", err)
 	}
@@ -108,12 +97,7 @@ func (c *reverseCommunicator) SendListRequest(forPush bool) error {
 		ForPush: forPush,
 	}
 
-	reqRaw, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("encoding ListRequest: %w", err)
-	}
-
-	_, err = c.out.Write(withNewline(reqRaw))
+	_, err := c.out.Write([]byte(req.String() + "\n"))
 	if err != nil {
 		return fmt.Errorf("writing ListRequest: %w", err)
 	}
@@ -138,15 +122,15 @@ func (c *reverseCommunicator) SendPushRequestBatch(refs map[string]string) error
 			Remote: plumbing.ReferenceName(remote),
 		}
 
-		reqRaw, err := json.Marshal(req)
-		if err != nil {
-			return fmt.Errorf("encoding PushRequest: %w", err)
-		}
-
-		_, err = c.out.Write(withNewline(reqRaw))
+		_, err := c.out.Write([]byte(req.String() + "\n"))
 		if err != nil {
 			return fmt.Errorf("writing PushRequest: %w", err)
 		}
+	}
+
+	_, err := c.out.Write([]byte("\n"))
+	if err != nil {
+		return fmt.Errorf("completing PushRequest: %w", err)
 	}
 
 	return nil
@@ -160,15 +144,15 @@ func (c *reverseCommunicator) SendFetchRequestBatch(refs []plumbing.Reference) e
 			Ref: &ref,
 		}
 
-		reqRaw, err := json.Marshal(req)
-		if err != nil {
-			return fmt.Errorf("encoding FetchRequest: %w", err)
-		}
-
-		_, err = c.out.Write(withNewline(reqRaw))
+		_, err := c.out.Write([]byte(req.String() + "\n"))
 		if err != nil {
 			return fmt.Errorf("writing FetchRequest: %w", err)
 		}
+	}
+
+	_, err := c.out.Write([]byte("\n"))
+	if err != nil {
+		return fmt.Errorf("completing FetchRequest: %w", err)
 	}
 
 	return nil
