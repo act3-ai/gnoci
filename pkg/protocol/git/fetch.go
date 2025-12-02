@@ -14,11 +14,6 @@ type FetchRequest struct {
 	Ref *plumbing.Reference
 }
 
-// String condenses [FetchRequest] into a string, the raw request received from Git.
-func (r *FetchRequest) String() string {
-	return fmt.Sprintf("%s %s %s", r.Cmd, r.Ref.Hash(), r.Ref.Name())
-}
-
 // Parse decodes request fields ensuring the [FetchRequest] is of the correct type, is supported,
 // and has a valid value.
 //
@@ -32,6 +27,7 @@ func (r *FetchRequest) Parse(fields []string) error {
 	if cmd != Fetch {
 		return fmt.Errorf("%w: got %s, want %s", ErrUnexpectedRequest, cmd, Fetch)
 	}
+	r.Cmd = Fetch
 
 	hash := fields[1]
 	name := fields[2]
@@ -41,4 +37,9 @@ func (r *FetchRequest) Parse(fields []string) error {
 	)
 
 	return nil
+}
+
+// String condenses [FetchRequest] into a string, the raw request received from Git.
+func (r *FetchRequest) String() string {
+	return fmt.Sprintf("%s %s %s", r.Cmd, r.Ref.Hash(), r.Ref.Name())
 }

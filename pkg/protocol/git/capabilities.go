@@ -41,7 +41,7 @@ func (r *CapabilitiesRequest) Parse(fields []string) error {
 	if cmd != Capabilities {
 		return fmt.Errorf("%w: got %s, want %s", ErrUnexpectedRequest, fields[0], Capabilities)
 	}
-	r.Cmd = cmd
+	r.Cmd = Capabilities
 
 	return nil
 }
