@@ -170,6 +170,7 @@ func (c *defaultCommunicator) ParseFetchRequestBatch() ([]git.FetchRequest, erro
 	defer func() { c.previous = nil }()
 
 	// if lookahead was used, include in batch
+	var batchSize int
 	var reqs []git.FetchRequest
 	if len(c.previous) > 0 {
 		var req git.FetchRequest
@@ -177,10 +178,11 @@ func (c *defaultCommunicator) ParseFetchRequestBatch() ([]git.FetchRequest, erro
 			return nil, err
 		}
 		reqs = append(reqs, req)
+		batchSize++
 	}
 
-	// ingest batch
-	var batchSize int
+	// ingest remaining batch
+
 	for {
 		batchSize++
 		fields, err := c.next()
@@ -208,6 +210,7 @@ func (c *defaultCommunicator) ParsePushRequestBatch() ([]git.PushRequest, error)
 	defer func() { c.previous = nil }()
 
 	// if lookahead was used, include in batch
+	var batchSize int
 	var reqs []git.PushRequest
 	if len(c.previous) > 0 {
 		var req git.PushRequest
@@ -215,17 +218,17 @@ func (c *defaultCommunicator) ParsePushRequestBatch() ([]git.PushRequest, error)
 			return nil, err
 		}
 		reqs = append(reqs, req)
+		batchSize++
 	}
 
-	// ingest batch
-	var batchSize int
+	// ingest remaining batch
 	for {
 		batchSize++
 		fields, err := c.next()
 		switch {
 		case errors.Is(err, git.ErrEmptyRequest):
 			if batchSize == 1 {
-				return nil, fmt.Errorf("received empty fetch request batch")
+				return nil, fmt.Errorf("received empty push request batch")
 			}
 			// batch complete
 			return reqs, nil

@@ -98,11 +98,6 @@ func (action *GitLFS) init(ctx context.Context, initReq *lfs.InitRequest) (func(
 			errs = append(errs, fmt.Errorf("removing temporary LFS file store: %w", err))
 		}
 
-		// if err := os.RemoveAll(fstorePath); err != nil {
-		// 	slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
-		// 	errs = append(errs, fmt.Errorf("cleaning up temporary"))
-		// }
-
 		return errors.Join(errs...)
 	}
 
