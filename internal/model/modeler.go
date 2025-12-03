@@ -59,7 +59,7 @@ type ReadOnlyModeler interface {
 	// TagRefs returns the existing tag references.
 	TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
 	// CommitExists uses a local repository to resolve the best known OCI layer containing the commit.
-	// a nil error with an empty layer indicates a commit does not exist.
+	// a nil error with an empty layer digest indicates a commit does not exist.
 	CommitExists(localRepo git.Repository, commit *object.Commit) (digest.Digest, error)
 }
 
@@ -94,8 +94,11 @@ func NewModeler(ref registry.Reference, fstore *file.Store, gt oras.GraphTarget)
 //
 // Note: updates to Git OCI metadata are not concurrency safe.
 type model struct {
-	ref    registry.Reference
-	gt     oras.GraphTarget
+	// OCI remote
+	ref registry.Reference
+	gt  oras.GraphTarget
+
+	// intermediate storage on push
 	fstore *file.Store
 
 	// populated on [model.Fetch]
@@ -171,7 +174,6 @@ func (m *model) FetchOrDefault(ctx context.Context) (ocispec.Descriptor, error) 
 		m.man = ocispec.Manifest{
 			MediaType:    ocispec.MediaTypeImageManifest,
 			ArtifactType: oci.ArtifactTypeGitManifest,
-			// annotations set on push
 		}
 		m.refsByLayer = map[digest.Digest][]plumbing.Hash{}
 

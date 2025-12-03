@@ -54,7 +54,12 @@ func HandlePush(ctx context.Context, local git.Repository, localDir string, remo
 		return fmt.Errorf("initializing temp repository for packfile storage: %w", err)
 	}
 
-	packHash, err := createPack(local, git.NewRepository(tmpRepo), newReachableObjs)
+	var thin bool
+	if len(remote.HeadRefs()) > 0 {
+		thin = true
+	}
+
+	packHash, err := createPack(local, git.NewRepository(tmpRepo), newReachableObjs, thin)
 	if err != nil {
 		return fmt.Errorf("creating packfile: %w", err)
 	}
@@ -216,7 +221,7 @@ func reachableObjs(local git.Repository, remote model.Modeler, newCommits []plum
 }
 
 // createPack builds a packfile using a set of hashes.
-func createPack(local, tmp git.Repository, hashes []plumbing.Hash) (h plumbing.Hash, err error) {
+func createPack(local, tmp git.Repository, hashes []plumbing.Hash, thin bool) (h plumbing.Hash, err error) {
 	// reference implementation: https://github.com/go-git/go-git/blob/v5.16.2/repository.go#L1815
 	pfw, ok := tmp.Storer().(storer.PackfileWriter)
 	if !ok {
@@ -228,9 +233,11 @@ func createPack(local, tmp git.Repository, hashes []plumbing.Hash) (h plumbing.H
 	}
 	defer wc.Close()
 
-	// TODO: What is a ref delta?
-	enc := packfile.NewEncoder(wc, local.Storer(), true)
-	h, err = enc.Encode(hashes, 10) // default window
+	// If we're creating a thin packfile we MUST use OBJ_REF_DELTA,
+	// a fully qualified packfile can use OBJ_OFS_DELTA to save a little space
+	// via shorter headers and is faster for git to read it.
+	enc := packfile.NewEncoder(wc, local.Storer(), thin)
+	h, err = enc.Encode(hashes, 10) // git's default window, https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---windown
 	if err != nil {
 		return h, fmt.Errorf("encoding packfile: %w", err)
 	}
