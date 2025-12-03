@@ -1,23 +1,58 @@
-# Git as OCI Artifact Data Model
+# Git as OCI Artifact Specification
 
-The data model for storing Git repositories in OCI compliant registries follows the [OCI image-spec](https://github.com/opencontainers/image-spec/blob/main/spec.md). In particular, the data model is packaged as defined by the [image manifest spec guidelines for artifact usage](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidelines-for-artifact-usage).
+The specification for storing Git repositories in OCI compliant registries follows the [OCI Image Specification](https://github.com/opencontainers/image-spec/blob/main/spec.md) and [OCI Distribution Specification](https://github.com/opencontainers/distribution-spec/blob/main/spec.md). In particular, the specification is packaged as defined by the [OCI Image Manifest Specification: Guidelines for Artifact Usage](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidelines-for-artifact-usage) (decision tree number 3).
 
-## Git OCI Artifact Design
+It is strongly recommended readers of this document are familiar with the following subset of the [OCI Image Specification](https://github.com/opencontainers/image-spec/blob/main/spec.md):
 
-### Git Artifact Manifest
+- [OCI Image Manifest Specification](https://github.com/opencontainers/image-spec/blob/main/manifest.md), particularly the [Guidelines for Artifact Usage](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidelines-for-artifact-usage)
+- [OCI Content Descriptors](https://github.com/opencontainers/image-spec/blob/main/descriptor.md#oci-content-descriptors)
+- [OCI Referrers API](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#listing-referrers)
 
-The data model for storing a Git artifact defines a configuration and at least one layer. As such, the data model follows the [guidelines for artifact usage](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidelines-for-artifact-usage) decision tree number 3 by defining three custom types:
+## Table of Contents
 
-- `application/vnd.ai.act3.git.repo.v1+json` - Manifest `artifactType`
-- `application/vnd.ai.act3.git.config.v1+json` - Config `mediaType`
-- `application/vnd.ai.act3.git.pack.v1` - Layer `mediaType`
+1. [Notational Conventions](#notational-conventions)
+2. [Overview](#overview)
+3. [Specification](#specification)
+     - [OCI Manifest](#oci-manifest)
+       - [Example OCI Manifest](#example-oci-manifest)
+     - [OCI Config](#oci-config)
+       - [Example OCI Config](#example-oci-config)
+     - [OCI Layer](#oci-layer)
 
-Additionally, two annotations are defined:
+## Notational Conventions
 
-- `vnd.ai.act3.git-remote-oci.version` - The version of the `git-remote-oci` remote helper that created the artifact.
-- `org.opencontainers.image.created` - Set to `1970-01-01T00:00:00Z`
+As done by the [OCI image-spec](https://github.com/opencontainers/image-spec/blob/main/spec.md), this specification defines the following notational conventions:
 
-#### Example Git Manifest
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119) (Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997).
+
+An implementation is not compliant if it fails to satisfy one or more of the MUST, MUST NOT, REQUIRED, SHALL, or SHALL NOT requirements for the protocols it implements.
+An implementation is compliant if it satisfies all the MUST, MUST NOT, REQUIRED, SHALL, and SHALL NOT requirements for the protocols it implements.
+
+## Overview
+
+Packaging a Git repository as an OCI image artifact uses one or more Git [packfiles](https://git-scm.com/docs/pack-format) as OCI layers, with Git references stored in a custom OCI config.
+
+## Specification
+
+### OCI Manifest
+
+The manifest specificification follows the [Guidelines for Artifact Usage](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidelines-for-artifact-usage), specifically decision tree number 3.
+
+A Git OCI artifact manifest:
+
+- MUST set `artifactType` to `application/vnd.ai.act3.git.repo.v1+json`.
+- MUST set `config.mediaType` to `application/vnd.ai.act3.git.config.v1+json`.
+  - Config MUST use the [defined config format](#oci-config).
+  - Config MUST contain at least one head reference to the default branch.
+  - Config MAY contain zero or more tag references.
+- MUST contain one or more layers with `mediaType` set to `application/vnd.ai.act3.git.pack.v1`.
+  - Layers MUST contain a Git [packfile](https://git-scm.com/docs/pack-format).
+  - The first layer MUST be a fully qualified packfile.
+  - Any additional layers SHOULD be [thin packfiles](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin). If so, these layers MUST contain a complete 
+
+Git OCI artifact manifest annotations MAY be used as desired.
+
+#### Example OCI Manifest
 
 ```json
 {
@@ -54,21 +89,17 @@ Additionally, two annotations are defined:
 }
 ```
 
-### Git Artifact Config
+### OCI Config
 
-The data model utilizes an OCI config for storing Git references. Alongside the commit a reference refers to, the config stores the OCI layer whose packfile contains the commit. The config defines two maps, containing head and tag references separately. Additional reference types, such as notes, may be added at a later date.
+The specification utilizes an OCI config for storing Git references. Alongside the commit a reference refers to, the config stores the OCI layer whose packfile contains the commit. The config defines two maps, containing head and tag references separately. Additional reference types, such as notes, may be added at a later date.
 
-#### Example Git Config
+#### Example OCI Config
 
 This config corresponds with the example manifest above. All references were included in the initial packfile, with only the `main` branch updated in the second "thin" packfile layer.
 
 ```json
 {
   "heads": {
-    "refs/heads/act3-pt/blueprints/render-orphan": {
-      "commit": "d2d51a405e5168f1945a02035c8f6089da53cb04",
-      "layer": "sha256:297b82b44c1c86e088cc95a68fd1d525878e4f430e48053ab6074e7cfe5c6d83"
-    },
     "refs/heads/command-fetch": {
       "commit": "56db9a50f127dae1a0da3563cb205a45ee077208",
       "layer": "sha256:297b82b44c1c86e088cc95a68fd1d525878e4f430e48053ab6074e7cfe5c6d83"
@@ -103,7 +134,7 @@ This config corresponds with the example manifest above. All references were inc
 }
 ```
 
-### Git Artifact Layers
+### OCI Layer
 
 Each artifact layer is a Git [packfile](https://git-scm.com/docs/pack-format), identified by the `application/vnd.ai.act3.git.pack.v1` `mediaType`. The first packfile in each artifact manifest (`layers[0]`) is [self-contained](https://git-scm.com/docs/git-pack-objects#_description), and may be unpacked without any additional information. All other packfiles (`layers[1:len(layers-1)]`) are ["thin" packs](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin) requiring a subset of the objects present in the previous packfile(s).
 
@@ -112,7 +143,7 @@ The decision to use packfiles was based on the following criteria:
 - Minimize data transfer
 - Minimize data storage in OCI
 
-By using packfiles, the data model reduces OCI storage space and data transfer by storing objects in [deltified representation](https://git-scm.com/docs/pack-format#_deltified_representation).
+By using packfiles, the specification reduces OCI storage space and data transfer by storing objects in [deltified representation](https://git-scm.com/docs/pack-format#_deltified_representation).
 
 See [limitations of packfiles](#usage-of-packfiles).
 
@@ -128,7 +159,7 @@ If a Git OCI artifact reference already exists, `git-remote-oci` creates a singl
 
 ## LFS OCI Artifact Design
 
-The data model uses the OCI [referrers API](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#listing-referrers) for managing `git-lfs` tracked files. As such, if a local repository has `git-lfs` configured the [Git OCI manifest](#git-artifact-manifest) descriptor is added as a `subject` in the LFS artifact manifest.
+The specification uses the OCI [referrers API](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#listing-referrers) for managing `git-lfs` tracked files. As such, if a local repository has `git-lfs` configured the [Git OCI manifest](#git-artifact-manifest) descriptor is added as a `subject` in the LFS artifact manifest.
 
 ### LFS Artifact Manifest
 
@@ -137,7 +168,7 @@ The LFS OCI manifest defines two custom types:
 - `application/vnd.ai.act3.git-lfs.repo.v1+json` - Manifest `artifactType`
 - `application/vnd.ai.act3.git-lfs.object.v1` - Layer `mediaType`
 
-The data model does not require a configuration, instead the `config` descriptor is set to the empty descriptor.
+The specification does not require a configuration, instead the `config` descriptor is set to the empty descriptor.
 
 The same annotations as the [Git artifact manifest](#git-artifact-manifest) are defined:
 
@@ -194,7 +225,7 @@ The same annotations as the [Git artifact manifest](#git-artifact-manifest) are 
 
 ### LFS Artifact Config
 
-The data model does not require a configuration, instead the `config` descriptor is set to the empty descriptor.
+The specification does not require a configuration, instead the `config` descriptor is set to the empty descriptor.
 
 ### LFS Artifact Layers
 
