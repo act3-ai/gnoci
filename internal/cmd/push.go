@@ -208,7 +208,6 @@ func reachableObjs(local git.Repository, remote model.Modeler, newCommits []plum
 	}
 	// TODO: are tags necessary? We may be able to get away without them.
 	for _, refInfo := range tagRefs {
-
 		ignoreCommits = append(ignoreCommits, plumbing.NewHash(refInfo.Commit))
 	}
 
