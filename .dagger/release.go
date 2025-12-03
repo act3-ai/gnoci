@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	githubHost = "github.com"
 	githubSlug = "act3-ai/gnoci"
 )
 
@@ -22,7 +21,7 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 ) (*dagger.Changeset, error) {
 	src := gitRef.Tree()
 
-	_ = g.BuildAllPlatforms(ctx, src, version, []dagger.Platform{"linux/amd64", "linux/arm64", "darwin/arm64"})
+	_ = g.BuildAllPlatforms(ctx, src, version, buildPlatforms)
 
 	if _, err := g.Test().All(ctx, src); err != nil {
 		return nil, err

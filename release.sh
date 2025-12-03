@@ -128,13 +128,7 @@ prompt_continue() {
 prepare() {
     echo "Running prepare stage..."
 
-    # use given version if provided
-    local args=()
-    if [[ -n "$explicit_version" ]]; then
-        args+=("--version" "$explicit_version")
-    fi
-
-    dagger -s="$silent" call release-prepare --git-ref=. "${args[@]}"
+    dagger -s="$silent" call release-prepare --git-ref=. --version="$explicit_version"
 
     echo "Successfully ran prepare stage."
     echo "Please review the local changes."

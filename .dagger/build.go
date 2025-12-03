@@ -17,6 +17,10 @@ const (
 	gitLFSExecName = "git-lfs-remote-oci"
 )
 
+var (
+	buildPlatforms = []dagger.Platform{"linux/amd64", "linux/arm64", "darwin/arm64"}
+)
+
 // Build an git-remote-oci executable.
 func (g *Gnoci) BuildGit(ctx context.Context,
 	// Source code directory
@@ -77,6 +81,8 @@ func (g *Gnoci) BuildGitLFS(ctx context.Context,
 
 // Build git-remote-oci binaries for multiple platforms, nested in directories
 // named by platform.
+//
+//nolint:dupl
 func (g *Gnoci) BuildGitPlatforms(ctx context.Context,
 	// Source code directory
 	// +defaultPath="/"
@@ -116,6 +122,8 @@ func (g *Gnoci) BuildGitPlatforms(ctx context.Context,
 
 // Build git-lfs-remote-oci binaries for multiple platforms, nested in directories
 // named by platform.
+//
+//nolint:dupl
 func (g *Gnoci) BuildGitLFSPlatforms(ctx context.Context,
 	// Source code directory
 	// +defaultPath="/"
