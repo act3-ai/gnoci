@@ -209,6 +209,8 @@ func (c *defaultCommunicator) ParseFetchRequestBatch() ([]git.FetchRequest, erro
 func (c *defaultCommunicator) ParsePushRequestBatch() ([]git.PushRequest, error) { //nolint:dupl
 	defer func() { c.previous = nil }()
 
+	// TODO: Zero or more protocol options may be entered after the last push command, before the batch’s terminating blank line.
+
 	// if lookahead was used, include in batch
 	var batchSize int
 	var reqs []git.PushRequest

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"log/slog"
 	"path/filepath"
 	"slices"
@@ -51,6 +52,9 @@ type ReadOnlyModeler interface {
 	FetchOrDefault(ctx context.Context) (ocispec.Descriptor, error)
 	// FetchLayer fetches a packfile layer from OCI identifies by digest.
 	FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
+	// FetchLayersReverse returns an iterator that walks the set of packfile layers
+	// in reverse.
+	FetchLayersReverse(ctx context.Context) iter.Seq2[io.ReadCloser, error]
 	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
 	// the ref does not exist or if not supported (head or tag ref).
 	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, digest.Digest, error)
@@ -425,4 +429,15 @@ func (m *model) TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo {
 		return map[plumbing.ReferenceName]oci.ReferenceInfo{}
 	}
 	return m.cfg.Tags
+}
+
+func (m *model) FetchLayersReverse(ctx context.Context) iter.Seq2[io.ReadCloser, error] {
+	return func(yield func(io.ReadCloser, error) bool) {
+		for i := len(m.man.Layers) - 1; i >= 0; i-- {
+			rc, err := m.gt.Fetch(ctx, m.man.Layers[i])
+			if !yield(rc, err) {
+				return
+			}
+		}
+	}
 }
