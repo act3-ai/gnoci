@@ -42,13 +42,11 @@ A Git OCI artifact manifest:
 
 - MUST set `artifactType` to `application/vnd.ai.act3.git.repo.v1+json`.
 - MUST set `config.mediaType` to `application/vnd.ai.act3.git.config.v1+json`.
-  - Config MUST use the [defined config format](#oci-config).
-  - Config MUST contain at least one head reference to the default branch.
-  - Config MAY contain zero or more tag references.
 - MUST contain one or more layers with `mediaType` set to `application/vnd.ai.act3.git.pack.v1`.
   - Layers MUST contain a Git [packfile](https://git-scm.com/docs/pack-format).
   - The first layer MUST be a fully qualified packfile.
-  - Any additional layers SHOULD be [thin packfiles](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin). If so, these layers MUST contain a complete 
+  - Any additional layers SHOULD be [thin packfiles](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin).
+    - If so, these packfiles MUST contain a complete Git tree for layer ranges `[0:n]`, i.e. no dangling leaves.
 
 Git OCI artifact manifest annotations MAY be used as desired.
 
@@ -91,7 +89,22 @@ Git OCI artifact manifest annotations MAY be used as desired.
 
 ### OCI Config
 
-The specification utilizes an OCI config for storing Git references. Alongside the commit a reference refers to, the config stores the OCI layer whose packfile contains the commit. The config defines two maps, containing head and tag references separately. Additional reference types, such as notes, may be added at a later date.
+A Git OCI artifact config:
+
+- MUST be identified by the `mediaType` `application/vnd.ai.act3.git.config.v1+json`.
+- MUST use the [defined config format](#config-format).
+- MUST contain at least one head reference to the default branch.
+- MAY contain zero or more tag references.
+
+#### Config Format
+
+The format of a Git OCI artifact config is a JSON object with two maps containing head and tag references
+
+- Config Object
+  - `heads` : map of branch names to objects containing the referenced commit and the OCI manifest packfile layer containing the latest updates for the reference.
+  - `tags` : map of tag names to objects containing the referenced commit and the OCI manifest packfile layer containing the latest updates for the reference.
+
+Additional reference types, such as notes, may be added at a later date.
 
 #### Example OCI Config
 
@@ -136,16 +149,14 @@ This config corresponds with the example manifest above. All references were inc
 
 ### OCI Layer
 
-Each artifact layer is a Git [packfile](https://git-scm.com/docs/pack-format), identified by the `application/vnd.ai.act3.git.pack.v1` `mediaType`. The first packfile in each artifact manifest (`layers[0]`) is [self-contained](https://git-scm.com/docs/git-pack-objects#_description), and may be unpacked without any additional information. All other packfiles (`layers[1:len(layers-1)]`) are ["thin" packs](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin) requiring a subset of the objects present in the previous packfile(s).
+A Git OCI artifact layer:
 
-The decision to use packfiles was based on the following criteria:
-
-- Minimize data transfer
-- Minimize data storage in OCI
-
-By using packfiles, the specification reduces OCI storage space and data transfer by storing objects in [deltified representation](https://git-scm.com/docs/pack-format#_deltified_representation).
-
-See [limitations of packfiles](#usage-of-packfiles).
+- MUST be identified by the `mediaType` `application/vnd.ai.act3.git.pack.v1`,
+- MUST contain a Git [packfile](https://git-scm.com/docs/pack-format).
+- The first layer MUST be a fully qualified, self-contained, Git [packfile](https://git-scm.com/docs/pack-format).
+  - Any additional layers SHOULD be [thin packfiles](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin).
+    - Thin packfiles MUST contain a complete Git tree for layer ranges `[0:n]`, i.e. no dangling leaves.
+    - Thin packfiles SHOULD not contain duplicate data among themselves.
 
 ### Git Artifact Creation and Updates
 
@@ -243,95 +254,4 @@ The initial LFS artifact is created the first time a `git` commit object contain
 
 If an LFS artifact already exists, additional LFS files are appended to the LFS manifest layers.
 
-## Full Git & LFS Artifact Diagram
 
-Elements outlined in orange indicate the active graph for the OCI reference at that point in time.
-
-```mermaid
----
-title: Manifest Approach
----
-
-flowchart LR
-    subgraph First_Sync
-    LFSM_1[LFS Manifest 1a] -.-> |Subject| SyncM_1
-    LFSM_1 --> LFSL_1([LFS Layer 1])
-
-    SyncM_1[Git Manifest 1a] --> packfile_1([packfile 1 - full])
-    end
-
-    subgraph Second_Sync
-    LFSM_2_a[LFS Manifest 1a] -.-> |Subject| SyncM_2_a
-    LFSM_2_a --> LFSL_2_1([LFS Layer 1])
-
-    LFSM_2_b[LFS Manifest 1b] -.-> |Subject| SyncM_2_b
-    LFSM_2_b --> LFSL_2_1
-    LFSM_2_b --> LFSL_2_2([LFS Layer 2])
-
-    SyncM_2_a[Git Manifest 1a] --> packfile_2_1([packfile 1 - full])
-    SyncM_2_b[Git Manifest 1b] --> packfile_2_1
-    SyncM_2_b --> packfile_2_2([packfile 2 - thin])
-    end
-
-    subgraph Third_Sync
-    LFSM_3_a[LFS Manifest 1a] -.-> |Subject| SyncM_3_a
-    LFSM_3_a --> LFSL_3_1([LFS Layer 1])
-
-    LFSM_3_b[LFS Manifest 1b] -.-> |Subject| SyncM_3_b
-    LFSM_3_b --> LFSL_3_1
-    LFSM_3_b --> LFSL_3_2([LFS Layer 2])
-
-    LFSM_3_c[LFS Manifest 1c] -.-> |Subject| SyncM_3_c
-    LFSM_3_c --> LFSL_3_1
-    LFSM_3_c --> LFSL_3_2
-    LFSM_3_c --> LFSL_3_3([LFS Layer 3])
-
-    SyncM_3_a[Git Manifest 1a] --> packfile_3_1([packfile 1 - full])
-    SyncM_3_b[Git Manifest 1b] --> packfile_3_1
-    SyncM_3_c[Git Manifest 1c] --> packfile_3_1
-    SyncM_3_b --> packfile_3_2([packfile 2 - thin])
-    SyncM_3_c --> packfile_3_2
-    SyncM_3_c --> packfile_3_3([packfile 3 - thin])
-    end
-
-    First_Sync ==> Second_Sync
-    Second_Sync ==> Third_Sync
-
-    classDef update stroke:#f70,stroke-width:3px
-    class LFSM_1,SyncM_1,LFSL_1,packfile_1 update
-    class LFSM_2_b,SyncM_2_b,packfile_2_2,LFSL_2_2,LFSL_2_1,packfile_2_1 update
-    class packfile_3_3,SyncM_3_c,LFSM_3_c,LFSL_3_3,LFSL_3_1,LFSL_3_2,packfile_3_1,packfile_3_2 update
-```
-
-## Artifact Distribution
-
-### Data Race Prevention
-
-By using OCI tag references as the git remote reference format, distributing the Git OCI artifact is susceptible to data race issues if two users are pushing to the same remote reference simultaneously. To avoid such a conflit, `git-remote-oci` takes the following measures:
-
-- Conditional pushes with `ETag` header, depending on registry support.
-  - "Clients MAY use a conditional HTTP push for registries that support ETag conditions to avoid conflicts with other clients." See [OCI distribution spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#referrers-tag-schema).
-- After pushing by digest, re-resolve the OCI tag reference to a digest just before tagging. This is done regardless if ETags are supported, as to not assume a registry properly supports it.
-  - This method does not fully eliminate the data race.
-  
-If a data race is detected, `git-remote-oci` will attempt to resolve it in a manner similar to `git`. In other words, it will fail if a fast-forward push is not possible. A data race involving pushes to separate branches may be an OCI data race, but is easily resolved by `git-remote-oci` by resolving the difference in packfile layers added to the manifest.
-
-## Limitations
-
-### Maximum Manifest Size
-
-Although the OCI does not specify strict [manifest size limitations](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests), also see [spec v1.1 releases](https://opencontainers.org/posts/blog/2024-03-13-image-and-distribution-1-1/#manifest-maximum-size), it does suggest at least a 4MiB image manifest size limit. Many clients and registries enforce their own size limits. As such, at some point in time packfiles in the artifact are "merged" to accommodate the manifest size limitation.
-
-As a rough estimation, a manifest would need over 16,000 pushes before reaching 4MiB:
-
-Assuming:
-
-- 435 byte manifest, with no layers
-- 252 bytes for each layer descriptor in manifest
-- 4 MiB size
-
-((4.194304e+6) - 435 ) / 252 = 16 642.3373 pushes
-
-### Usage of Packfiles
-
-The use of packfiles as artifact layers helps to reduce OCI registry storage space and push times. However, fetching from the OCI remote can be costly as the minimum amount of data that can be fetched is a packfile layer. Depending on the state of the local repository and the Git OCI artifact, only a subset of a packfile layer is actually needed; resulting in wasted data transfer. Although initially fetching more objects than necessary, this behavior can be beneficial in some cases. For instance, a user fetches `ref/heads/foo` and the remote packfile containing the objects needed to update `ref/heads/foo` also contains objects for `ref/heads/bar`. Because `git-remote-oci` loads the entire packfile into the local repository, a subsequent fetch for `ref/heads/bar`  only requires fetching the OCI config metadata; where `git` recognizes the objects for `ref/heads/bar` already exist locally.
