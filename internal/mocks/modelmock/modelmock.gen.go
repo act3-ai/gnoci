@@ -12,6 +12,7 @@ package modelmock
 import (
 	context "context"
 	io "io"
+	iter "iter"
 	reflect "reflect"
 
 	git "github.com/act3-ai/gnoci/internal/git"
@@ -162,6 +163,44 @@ func (c *MockReadOnlyModelerFetchLayerCall) Do(f func(context.Context, digest.Di
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockReadOnlyModelerFetchLayerCall) DoAndReturn(f func(context.Context, digest.Digest) (io.ReadCloser, error)) *MockReadOnlyModelerFetchLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// FetchLayersReverse mocks base method.
+func (m *MockReadOnlyModeler) FetchLayersReverse(ctx context.Context) iter.Seq2[io.ReadCloser, error] {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchLayersReverse", ctx)
+	ret0, _ := ret[0].(iter.Seq2[io.ReadCloser, error])
+	return ret0
+}
+
+// FetchLayersReverse indicates an expected call of FetchLayersReverse.
+func (mr *MockReadOnlyModelerMockRecorder) FetchLayersReverse(ctx any) *MockReadOnlyModelerFetchLayersReverseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchLayersReverse", reflect.TypeOf((*MockReadOnlyModeler)(nil).FetchLayersReverse), ctx)
+	return &MockReadOnlyModelerFetchLayersReverseCall{Call: call}
+}
+
+// MockReadOnlyModelerFetchLayersReverseCall wrap *gomock.Call
+type MockReadOnlyModelerFetchLayersReverseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockReadOnlyModelerFetchLayersReverseCall) Return(arg0 iter.Seq2[io.ReadCloser, error]) *MockReadOnlyModelerFetchLayersReverseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockReadOnlyModelerFetchLayersReverseCall) Do(f func(context.Context) iter.Seq2[io.ReadCloser, error]) *MockReadOnlyModelerFetchLayersReverseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockReadOnlyModelerFetchLayersReverseCall) DoAndReturn(f func(context.Context) iter.Seq2[io.ReadCloser, error]) *MockReadOnlyModelerFetchLayersReverseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -578,6 +617,44 @@ func (c *MockModelerFetchLayerCall) Do(f func(context.Context, digest.Digest) (i
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockModelerFetchLayerCall) DoAndReturn(f func(context.Context, digest.Digest) (io.ReadCloser, error)) *MockModelerFetchLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// FetchLayersReverse mocks base method.
+func (m *MockModeler) FetchLayersReverse(ctx context.Context) iter.Seq2[io.ReadCloser, error] {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchLayersReverse", ctx)
+	ret0, _ := ret[0].(iter.Seq2[io.ReadCloser, error])
+	return ret0
+}
+
+// FetchLayersReverse indicates an expected call of FetchLayersReverse.
+func (mr *MockModelerMockRecorder) FetchLayersReverse(ctx any) *MockModelerFetchLayersReverseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchLayersReverse", reflect.TypeOf((*MockModeler)(nil).FetchLayersReverse), ctx)
+	return &MockModelerFetchLayersReverseCall{Call: call}
+}
+
+// MockModelerFetchLayersReverseCall wrap *gomock.Call
+type MockModelerFetchLayersReverseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockModelerFetchLayersReverseCall) Return(arg0 iter.Seq2[io.ReadCloser, error]) *MockModelerFetchLayersReverseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockModelerFetchLayersReverseCall) Do(f func(context.Context) iter.Seq2[io.ReadCloser, error]) *MockModelerFetchLayersReverseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockModelerFetchLayersReverseCall) DoAndReturn(f func(context.Context) iter.Seq2[io.ReadCloser, error]) *MockModelerFetchLayersReverseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
