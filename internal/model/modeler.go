@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"log/slog"
 	"path/filepath"
 	"slices"
@@ -51,6 +52,9 @@ type ReadOnlyModeler interface {
 	FetchOrDefault(ctx context.Context) (ocispec.Descriptor, error)
 	// FetchLayer fetches a packfile layer from OCI identifies by digest.
 	FetchLayer(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
+	// FetchLayersReverse returns an iterator that walks the set of packfile layers
+	// in reverse.
+	FetchLayersReverse(ctx context.Context) iter.Seq2[io.ReadCloser, error]
 	// ResolveRef resolves the commit hash a remote reference refers to. Returns nil, nil if
 	// the ref does not exist or if not supported (head or tag ref).
 	ResolveRef(ctx context.Context, refName plumbing.ReferenceName) (*plumbing.Reference, digest.Digest, error)
@@ -59,7 +63,7 @@ type ReadOnlyModeler interface {
 	// TagRefs returns the existing tag references.
 	TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo
 	// CommitExists uses a local repository to resolve the best known OCI layer containing the commit.
-	// a nil error with an empty layer indicates a commit does not exist.
+	// a nil error with an empty layer digest indicates a commit does not exist.
 	CommitExists(localRepo git.Repository, commit *object.Commit) (digest.Digest, error)
 }
 
@@ -94,8 +98,11 @@ func NewModeler(ref registry.Reference, fstore *file.Store, gt oras.GraphTarget)
 //
 // Note: updates to Git OCI metadata are not concurrency safe.
 type model struct {
-	ref    registry.Reference
-	gt     oras.GraphTarget
+	// OCI remote
+	ref registry.Reference
+	gt  oras.GraphTarget
+
+	// intermediate storage on push
 	fstore *file.Store
 
 	// populated on [model.Fetch]
@@ -171,7 +178,6 @@ func (m *model) FetchOrDefault(ctx context.Context) (ocispec.Descriptor, error) 
 		m.man = ocispec.Manifest{
 			MediaType:    ocispec.MediaTypeImageManifest,
 			ArtifactType: oci.ArtifactTypeGitManifest,
-			// annotations set on push
 		}
 		m.refsByLayer = map[digest.Digest][]plumbing.Hash{}
 
@@ -423,4 +429,15 @@ func (m *model) TagRefs() map[plumbing.ReferenceName]oci.ReferenceInfo {
 		return map[plumbing.ReferenceName]oci.ReferenceInfo{}
 	}
 	return m.cfg.Tags
+}
+
+func (m *model) FetchLayersReverse(ctx context.Context) iter.Seq2[io.ReadCloser, error] {
+	return func(yield func(io.ReadCloser, error) bool) {
+		for i := len(m.man.Layers) - 1; i >= 0; i-- {
+			rc, err := m.gt.Fetch(ctx, m.man.Layers[i])
+			if !yield(rc, err) {
+				return
+			}
+		}
+	}
 }

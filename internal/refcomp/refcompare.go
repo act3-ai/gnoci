@@ -116,40 +116,46 @@ func (rc *refCompareCached) compare(force bool, localRef, remoteRef *plumbing.Re
 	// empty local indicates ref deletion
 	if localRef == nil {
 		rp.Status |= StatusDelete
+		return rp, nil
+	}
+
+	localCommit, err := rc.local.CommitObject(localRef.Hash())
+	if err != nil {
+		return RefPair{}, fmt.Errorf("resolving commit object %s from hash for local ref %s: %w", localRef.Hash().String(), localRef.Name().String(), err)
+	}
+
+	layer, err := rc.remote.CommitExists(rc.local, localCommit)
+	if err != nil {
+		return RefPair{}, fmt.Errorf("resolving existence of commit %s in remote: %w", localCommit, err)
+	}
+	if layer.String() != "" {
+		// commit exists in a previous layer
+		rp.Layer = layer
 	} else {
-		localCommit, err := rc.local.CommitObject(localRef.Hash())
-		if err != nil {
-			return RefPair{}, fmt.Errorf("resolving commit object %s from hash for local ref %s: %w", localRef.Hash().String(), localRef.Name().String(), err)
-		}
+		// unseen commit
+		rp.Status |= StatusAddCommit
+	}
 
-		layer, err := rc.remote.CommitExists(rc.local, localCommit)
-		if err != nil {
-			return RefPair{}, fmt.Errorf("resolving existence of commit %s in remote: %w", localCommit, err)
-		}
-		if layer.String() != "" {
-			rp.Layer = layer
-		} else {
-			rp.Status |= StatusAddCommit
-		}
+	if remoteRef.Hash().IsZero() {
+		// remote ref dne
+		rp.Status |= StatusUpdateRef
+		return rp, nil
+	}
 
-		if remoteRef.Hash().IsZero() {
-			rp.Status |= StatusUpdateRef
-		} else {
-			remoteCommit, err := rc.local.CommitObject(remoteRef.Hash())
-			if err != nil {
-				return RefPair{}, fmt.Errorf("resolving commit object from hash for remote ref: %w", err)
-			}
+	remoteCommit, err := rc.local.CommitObject(remoteRef.Hash())
+	if err != nil {
+		return RefPair{}, fmt.Errorf("resolving commit object from hash for remote ref: %w", err)
+	}
 
-			isAncestor, err := remoteCommit.IsAncestor(localCommit)
-			if err != nil {
-				return RefPair{}, fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
-			}
-			if isAncestor {
-				rp.Status |= StatusUpdateRef
-			} else if !force {
-				return RefPair{}, fmt.Errorf("remote reference %s update is not a fast forward of local ref %s", remoteRef.Name().String(), localRef.Name().String())
-			}
-		}
+	isAncestor, err := remoteCommit.IsAncestor(localCommit)
+	if err != nil {
+		return RefPair{}, fmt.Errorf("resolving remote commit ancestor status of local: %w", err)
+	}
+	if isAncestor {
+		rp.Status |= StatusUpdateRef
+	} else if !force {
+		// commit histories have diverged, and we're not overwriting the remote
+		return RefPair{}, fmt.Errorf("remote reference %s update is not a fast forward of local ref %s", remoteRef.Name().String(), localRef.Name().String())
 	}
 
 	return rp, nil
