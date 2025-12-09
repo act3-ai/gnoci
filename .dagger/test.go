@@ -44,25 +44,83 @@ func (t *Test) Unit(ctx context.Context,
 				Stdout(ctx)
 }
 
+// PushClone push to then clone from an OCI registry.
+func (t *Test) PushClone(ctx context.Context,
+	// source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
+	// Git reference to test repository
+	gitRef *dagger.GitRef,
+) (string, error) {
+	// start registry
+	registry := registryService()
+	registry, err := registry.Start(ctx)
+	if err != nil {
+		return "", fmt.Errorf("starting registry service: %w", err)
+	}
+	defer registry.Stop(ctx) //nolint:errcheck
+
+	const ociSlug = "repo/test:clone"
+
+	pushOut, err := t.Push(ctx, src, gitRef, registry, ociSlug)
+	if err != nil {
+		return pushOut, fmt.Errorf("failed to push repository to OCI: %w", err)
+	}
+
+	cloneOut, err := t.Clone(ctx, src, registry, ociSlug)
+	if err != nil {
+		return pushOut, fmt.Errorf("failed to clone repository from OCI: %w", err)
+	}
+
+	return strings.Join([]string{pushOut, cloneOut}, "\n\n"), nil
+}
+
 // Push pushes a git repository to an OCI registry.
 //
 //nolint:wrapcheck
 func (t *Test) Push(ctx context.Context,
-	// Git reference to test repository
-	gitRef *dagger.GitRef,
 	// source code directory
 	// +defaultPath="/"
 	src *dagger.Directory,
+	// Git reference to test repository
+	gitRef *dagger.GitRef,
+	// registry service
+	registry *dagger.Service,
+	// git OCI remote repository slug
+	ociSlug string,
 ) (string, error) {
-	// start registry
-	regService := registryService()
-	regService, err := regService.Start(ctx)
+	regEndpoint, err := registry.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
 	if err != nil {
 		return "", err
 	}
-	defer regService.Stop(ctx) //nolint:errcheck
+	regHost := strings.TrimPrefix(regEndpoint, "http://")
 
-	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
+	const srcDir = "src"
+	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
+		Container().
+		With(t.withGit(ctx, src)).
+		With(withGitConfig()).
+		With(withGnociConfig(regHost)).
+		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
+		WithWorkdir(srcDir).
+		WithServiceBinding("registry", registry).
+		WithExec([]string{"git", "push", ociRef(regHost, ociSlug), "--all"}).
+		CombinedOutput(ctx)
+}
+
+// Clone clones a git repository from an OCI registry.
+//
+//nolint:wrapcheck
+func (t *Test) Clone(ctx context.Context,
+	// source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
+	// registry service
+	registry *dagger.Service,
+	// git OCI remote repository slug
+	ociSlug string,
+) (string, error) {
+	regEndpoint, err := registry.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
 	if err != nil {
 		return "", err
 	}
@@ -75,10 +133,9 @@ func (t *Test) Push(ctx context.Context,
 		With(t.withGit(ctx, src)).
 		With(withGitConfig()).
 		With(withGnociConfig(regHost)).
-		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
 		WithWorkdir(srcDir).
-		WithServiceBinding("registry", regService).
-		WithExec([]string{"git", "push", ociRef(regHost, "repo/test:sync"), "--all"}).
+		WithServiceBinding("registry", registry).
+		WithExec([]string{"git", "clone", ociRef(regHost, ociSlug)}).Terminal().
 		CombinedOutput(ctx)
 }
 
