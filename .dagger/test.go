@@ -44,13 +44,37 @@ func (t *Test) Unit(ctx context.Context,
 				Stdout(ctx)
 }
 
+// func (t *Test) PushCloneSimple(ctx context.Context,
+// 	// source code directory
+// 	// +defaultPath="/"
+// 	src *dagger.Directory,
+// ) (string, error) {
+// 	testDir, err := os.MkdirTemp("", "test-push-clone-simple-*")
+// 	if err != nil {
+// 		return "", fmt.Errorf("initializing test repository directory: %w", err)
+// 	}
+// 	// defer os.RemoveAll(testDir)
+
+// 	ref, err := SimpleRepo(testDir)
+// 	if err != nil {
+// 		return "", fmt.Errorf("building test repository: %w", err)
+// 	}
+
+// 	gitRef := dag.Directory().
+// 		Directory(testDir).
+// 		AsGit().
+// 		Ref(ref.String())
+
+// 	return t.PushClone(ctx, src, gitRef)
+// }
+
 // PushClone push to then clone from an OCI registry.
 func (t *Test) PushClone(ctx context.Context,
 	// source code directory
 	// +defaultPath="/"
 	src *dagger.Directory,
-	// Git reference to test repository
-	gitRef *dagger.GitRef,
+	// Git repository
+	gitRepo *dagger.Directory,
 ) (string, error) {
 	// start registry
 	registry := registryService()
@@ -62,7 +86,7 @@ func (t *Test) PushClone(ctx context.Context,
 
 	const ociSlug = "repo/test:clone"
 
-	pushOut, err := t.Push(ctx, src, gitRef, registry, ociSlug)
+	pushOut, err := t.Push(ctx, src, gitRepo, registry, ociSlug)
 	if err != nil {
 		return pushOut, fmt.Errorf("failed to push repository to OCI: %w", err)
 	}
@@ -82,8 +106,8 @@ func (t *Test) Push(ctx context.Context,
 	// source code directory
 	// +defaultPath="/"
 	src *dagger.Directory,
-	// Git reference to test repository
-	gitRef *dagger.GitRef,
+	// Git repository
+	gitRepo *dagger.Directory,
 	// registry service
 	registry *dagger.Service,
 	// git OCI remote repository slug
@@ -101,7 +125,7 @@ func (t *Test) Push(ctx context.Context,
 		With(t.withGit(ctx, src)).
 		With(withGitConfig()).
 		With(withGnociConfig(regHost)).
-		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
+		WithDirectory(srcDir, gitRepo).
 		WithWorkdir(srcDir).
 		WithServiceBinding("registry", registry).
 		WithExec([]string{"git", "push", ociRef(regHost, ociSlug), "--all"}).
@@ -135,7 +159,7 @@ func (t *Test) Clone(ctx context.Context,
 		With(withGnociConfig(regHost)).
 		WithWorkdir(srcDir).
 		WithServiceBinding("registry", registry).
-		WithExec([]string{"git", "clone", ociRef(regHost, ociSlug)}).Terminal().
+		WithExec([]string{"git", "clone", ociRef(regHost, ociSlug)}).
 		CombinedOutput(ctx)
 }
 
