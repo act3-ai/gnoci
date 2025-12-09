@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"dagger/gnoci/internal/dagger"
+	"errors"
 	"fmt"
 	"math/rand"
 	"slices"
@@ -23,7 +24,7 @@ type Eval struct {
 }
 
 // Refs returns a slice of all head and tag references and their commits, as "<commit> SP <reference>".
-func (t *Eval) Refs(ctx context.Context,
+func (e *Eval) Refs(ctx context.Context,
 	// repo is a git repository
 	repo *dagger.Directory,
 ) ([]string, error) {
@@ -36,11 +37,11 @@ func (t *Eval) Refs(ctx context.Context,
 		return nil, fmt.Errorf("getting git head and tag references: %w", err)
 	}
 
-	return strings.Split(out, "\n"), nil
+	return strings.Split(strings.TrimSpace(out), "\n"), nil
 }
 
 // Heads returns a slice of all head references (branches) and their commits, as "<commit> SP <reference>".
-func (t *Eval) Heads(ctx context.Context,
+func (e *Eval) Heads(ctx context.Context,
 	// repo is a git repository
 	repo *dagger.Directory,
 ) ([]string, error) {
@@ -57,7 +58,7 @@ func (t *Eval) Heads(ctx context.Context,
 }
 
 // Tags returns a slice of all tag references and their commits, as "<commit> SP <reference>".
-func (t *Eval) Tags(ctx context.Context,
+func (e *Eval) Tags(ctx context.Context,
 	// repo is a git repository
 	repo *dagger.Directory,
 ) ([]string, error) {
@@ -71,6 +72,74 @@ func (t *Eval) Tags(ctx context.Context,
 	}
 
 	return strings.Split(out, "\n"), nil
+}
+
+// ValidateResults ensures the expected references and their commits ae in the result git repository.
+func (e *Eval) ValidateResult(ctx context.Context,
+	// expected list of '<commit> SP <ref>' (output of git show-ref)
+	expectedCommitRefs []string,
+	// evaluated git repository
+	result *dagger.Directory,
+) error {
+	srcResolver := make(map[string]string, len(expectedCommitRefs))
+	for _, commitRef := range expectedCommitRefs {
+		commit, ref, err := splitRefPair(commitRef)
+		if err != nil {
+			return fmt.Errorf("splitting expected ref pair: %w", err)
+		}
+		srcResolver[ref] = commit
+	}
+
+	resultRefs, err := e.Refs(ctx, result)
+	if err != nil {
+		return fmt.Errorf("getting result references: %w", err)
+	}
+
+	// check expected is valid, if not expected disregard
+	var errs []error
+	for _, commitRef := range resultRefs {
+		commit, ref, err := splitRefPair(commitRef)
+		if err != nil {
+			return fmt.Errorf("splitting result ref pair: %w", err)
+		}
+
+		expectedCommit, ok := srcResolver[ref]
+		switch {
+		case !ok:
+			continue
+		case expectedCommit != commit:
+			errs = append(errs, fmt.Errorf("evaluating reference %s: expected commit %s, got %s", ref, expectedCommit, commit))
+		default:
+			// success!
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// refsFromRefPair removes the commit portion of a 'commit SP ref'
+// pair, returning a slice of only references.
+func refsFromRefPair(commitRefs []string) ([]string, error) {
+	result := make([]string, 0, len(commitRefs))
+	for _, pair := range commitRefs {
+		_, ref, err := splitRefPair(pair)
+		if err != nil {
+			return nil, fmt.Errorf("removing commit from reference pair: %w", err)
+		}
+		result = append(result, ref)
+	}
+	return result, nil
+}
+
+// splitRefPair returns the commit and reference that make up
+// a reference pair 'commit SP ref'.
+func splitRefPair(pair string) (string, string, error) {
+	fields := strings.Fields(pair)
+	if len(fields) != 2 {
+		return "", "", fmt.Errorf("invalid commit reference pair %s, expected 'commit SP ref'", pair)
+	}
+	commit, ref := fields[0], fields[1]
+	return commit, ref, nil
 }
 
 // subset reduces a slice to a random subset.

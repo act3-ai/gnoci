@@ -48,19 +48,7 @@ func (t *Test) Unit(ctx context.Context) (string, error) {
 				Stdout(ctx)
 }
 
-func (t *Test) Functional(ctx context.Context) (string, error) {
-
-}
-
-// PushClone push to then clone from an OCI registry.
-func (t *Test) PushClone(ctx context.Context,
-	// Git repository
-	gitRepo *dagger.Directory,
-	// git references to push
-	refs []string,
-	// git OCI remote repository slug
-	ociSlug string,
-) error {
+func (t *Test) Functional(ctx context.Context) error {
 	// start registry
 	registry := registryService()
 	registry, err := registry.Start(ctx)
@@ -69,21 +57,52 @@ func (t *Test) PushClone(ctx context.Context,
 	}
 	defer registry.Stop(ctx) //nolint:errcheck
 
-	_, err = t.Push(ctx, gitRepo, refs, registry, ociSlug)
+	simpleSlug := "test/simple:src"
+	simpleRepo := t.Repos().Simple()
+	refPairs, err := t.Eval().Refs(ctx, simpleRepo)
 	if err != nil {
-		return fmt.Errorf("failed to push repository to OCI: %w", err)
+		return fmt.Errorf("getting commit reference pairs from simple source repository: %w", err)
 	}
 
-	_, err = t.Clone(ctx, registry, ociSlug)
+	err = t.PushClone(ctx, simpleRepo, refPairs, registry, simpleSlug)
 	if err != nil {
-		return fmt.Errorf("failed to clone repository from OCI: %w", err)
+		return fmt.Errorf("PushClone: %w", err)
 	}
 
 	return nil
 }
 
-func (t *Test) ValidateResult(srcRefs []string, result *dagger.Directory) error {
+// PushClone evaluates a push to then clone from an OCI registry.
+func (t *Test) PushClone(ctx context.Context,
+	// Git repository
+	gitRepo *dagger.Directory,
+	// git 'commit SP ref' pairs to push
+	refPairs []string,
+	// registry service
+	registry *dagger.Service,
+	// git OCI remote repository slug
+	ociSlug string,
+) error {
+	refs, err := refsFromRefPair(refPairs)
+	if err != nil {
+		return fmt.Errorf("getting refs from commit reference pairs: %w", err)
+	}
 
+	_, err = t.Push(ctx, gitRepo, refs, registry, ociSlug)
+	if err != nil {
+		return fmt.Errorf("failed to push repository to OCI: %w", err)
+	}
+
+	result, err := t.Clone(ctx, registry, ociSlug)
+	if err != nil {
+		return fmt.Errorf("failed to clone repository from OCI: %w", err)
+	}
+
+	if err := t.Eval().ValidateResult(ctx, refPairs, result); err != nil {
+		return fmt.Errorf("evaluating result: %w", err)
+	}
+
+	return nil
 }
 
 // Push pushes a git repository to an OCI registry.
@@ -106,9 +125,8 @@ func (t *Test) Push(ctx context.Context,
 	regHost := strings.TrimPrefix(regEndpoint, "http://")
 
 	const srcDir = "src"
-	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
-		Container().
-		With(t.withGit(ctx)).
+	return ctrWithGit().
+		With(t.withGitRemoteHelper(ctx)).
 		With(withGitConfig()).
 		With(withGnociConfig(regHost)).
 		WithDirectory(srcDir, gitRepo).
@@ -138,9 +156,8 @@ func (t *Test) Clone(ctx context.Context,
 		return nil, fmt.Errorf("malformed oci slug %s, expected <repo>:<tag>", ociSlug)
 	}
 
-	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
-		Container().
-		With(t.withGit(ctx)).
+	return ctrWithGit().
+		With(t.withGitRemoteHelper(ctx)).
 		With(withGitConfig()).
 		With(withGnociConfig(regHost)).
 		WithServiceBinding("registry", registry).
@@ -148,8 +165,8 @@ func (t *Test) Clone(ctx context.Context,
 		Directory(tag), nil
 }
 
-// withGit builds and installs git-remote-oci in a container.
-func (t *Test) withGit(ctx context.Context) func(c *dagger.Container) *dagger.Container {
+// withGitRemoteHelper builds and installs git-remote-oci in a container.
+func (t *Test) withGitRemoteHelper(ctx context.Context) func(c *dagger.Container) *dagger.Container {
 	return func(c *dagger.Container) *dagger.Container {
 		return c.WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, t.Src, "test-dev", dagger.Platform("linux/amd64")))
 	}
@@ -164,8 +181,8 @@ func withGitConfig() func(c *dagger.Container) *dagger.Container {
 	}
 }
 
-// withGitLFS builds and installs git-lfs in an container.
-func (t *Test) withGitLFS(ctx context.Context) func(c *dagger.Container) *dagger.Container {
+// withGitLFSRemoteHelper builds and installs git-lfs in an container.
+func (t *Test) withGitLFSRemoteHelper(ctx context.Context) func(c *dagger.Container) *dagger.Container {
 	return func(c *dagger.Container) *dagger.Container {
 		return c.WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, t.Src, "test-dev", dagger.Platform("linux/amd64")))
 	}

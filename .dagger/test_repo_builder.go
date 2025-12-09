@@ -10,12 +10,21 @@ import (
 const srcDir = "src"
 
 // Git repository builder.
-func (t *Test) RepoBuilder() *RepoBuilder {
+func (t *Test) RepoBuilder(
+	// base git repository
+	// +optional
+	base *dagger.Directory,
+) *RepoBuilder {
 	ctr := dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
 		Container().
 		With(withGitConfig()).
-		WithWorkdir(srcDir).
-		WithExec([]string{"git", "init"})
+		With(func(r *dagger.Container) *dagger.Container {
+			if base != nil {
+				return r.WithDirectory(srcDir, base)
+			}
+			return r.WithWorkdir(srcDir).
+				WithExec([]string{"git", "init"})
+		})
 
 	return &RepoBuilder{
 		Test: t,

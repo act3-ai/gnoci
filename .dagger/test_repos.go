@@ -18,7 +18,7 @@ type Repos struct {
 
 // Simple repo contains a few commits on main.
 func (r *Repos) Simple() *dagger.Directory {
-	return r.Test.RepoBuilder().
+	return r.Test.RepoBuilder(nil).
 		NewCommit().
 		NewCommit().
 		NewCommit().
