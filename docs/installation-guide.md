@@ -1,11 +1,11 @@
 # Git Remote Helper for OCI Registries Installation Guide
 
-This Installation Guide provides the steps necessary to set up `git-remote-oci`.
+This Installation Guide provides the steps necessary to set up `git-remote-oci` and `git-lfs-remote-oci`.
 
 Regardless of installation method:
 
 - `git-remote-oci` *must* be made available on `$PATH` to be accessible by `git`.
-- `git-lfs-remote-oci` *should* be made available on `$PATH` to be accessible by `git-lfs`, however a relative or abosulte path set with `git config lfs.customtransfer.oci.path <path>` is sufficient.
+- `git-lfs-remote-oci` *should* be made available on `$PATH` to be accessible by `git-lfs`, however setting a path with `git config lfs.customtransfer.oci.path <path>` is sufficient.
 
 ## Installing From Source
 
@@ -14,12 +14,13 @@ Regardless of installation method:
 As with all go projects, you can clone, build, and move to `$PATH` if desired.
 
 1. Clone source repository
-   - e.g. `git clone git@github.com:act3-ai/gnoci.git`
+   - `git clone git@github.com:act3-ai/gnoci.git`
 2. Build from source
-   - e.g. `go build -o bin/git-remote-oci ./cmd/git-remote-oci`
-   - e.g. `go build -o bin/git-lfs-remote-oci ./cmd/git-lfs-remote-oci`
-3. Make build available on `$PATH`
-   - e.g. `sudo cp ~/go/bin/git-remote-oci`
+   - `go build -o bin/git-remote-oci ./cmd/git-remote-oci`
+   - `go build -o bin/git-lfs-remote-oci ./cmd/git-lfs-remote-oci`
+3. Make build(s) available on `$PATH`
+   - `sudo cp ~/go/bin/git-remote-oci`
+   - `sudo cp ~/go/bin/git-lfs-remote-oci`
 
 ### Using dagger
 
@@ -30,7 +31,7 @@ The default build platform is `linux/amd64`:
 - `dagger call build-git export --path <installation-path>`
 - `dagger call build-git-lfs export --path <installation-path>`
 
-For other platforms:
+For other platforms use `--platform "OS/ARCH"`:
 
 - `dagger call build-git --platform "linux/arm64" export --path <installation-path>`
 - `dagger call build-git-lfs --platform "linux/arm64" export --path <installation-path>`
