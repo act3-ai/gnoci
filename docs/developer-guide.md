@@ -6,7 +6,9 @@ This document is intended for developers to familiarize themselves with standard
 
 - [Git Remote Helper for OCI Registries Developer Guide](#git-remote-helper-for-oci-registries-developer-guide)
   - [Table of Contents](#table-of-contents)
-  - [Design Patterns](#design-patterns)
+  - [Repository Organization](#repository-organization)
+  - [Specification](#specification)
+  - [Design Diagrams](#design-diagrams)
   - [Developer Workflows](#developer-workflows)
     - [Taskfile](#taskfile)
     - [Build git-remote-oci and git-lfs-remote-oci](#build-git-remote-oci-and-git-lfs-remote-oci)
@@ -26,7 +28,7 @@ This document is intended for developers to familiarize themselves with standard
   - [Miscellanous](#miscellanous)
     - [Progress Example](#progress-example)
 
-## Design Patterns
+## Repository Organization
 
 Git Remote Helper for OCI Registries is organized into four main groups:
 
@@ -34,6 +36,14 @@ Git Remote Helper for OCI Registries is organized into four main groups:
 - [`internal/actions/*`](../internal/actions): Main functionality of `git-remote-oci` and `git-lfs-remote-oci`, utilizes `internal/*` and `pkg/*`. Ideally as small as possible, most logic should live in `internal/*` or `pkg/*`.
 - [`internal/*](../internal/): Helper packages for actions. Most code should live here unless there's a concrete reason to make it public.
 - [`pkg/*`](../pkg/): Intentionally public interfaces that may use useful for other projects.
+
+## Specification
+
+Developers should be familiar with the [Git OCI Artifact Specification](./spec/oci-spec.md) and the [Data Model](./spec/data-model.md) documentation.
+
+## Design Diagrams
+
+[Sequence Diagrams](./diagrams/sequence/) outline the interactions between `git`, `git-remote-oci`, `git-lfs`, and `git-lfs-remote-oci`. It is recommended to begin with the [Combined Sequence Diagram](./diagrams/sequence/combined.md), note that `git-remote-oci` and `git-lfs-remote-oci` do not depend on one another and may be used without the other component.
 
 ## Developer Workflows
 

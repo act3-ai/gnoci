@@ -32,11 +32,15 @@ Refer to the [Git OCI Artifact Specification](docs/spec/oci-spec.md).
 - Evaluating remote references
 - Any native Git actions involving a remote
 
+`git-remote-oci` does not require `git-lfs-remote-oci`.
+
 ## Git LFS Remote Helper for OCI Registries
 
 `git-lfs-remote-oci` is a Git LFS [custom transfer agent](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md) that implements the Git LFS [custom transfer protocol](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#protocol). Specifically, it is a [standalone transfer agent](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#using-a-custom-transfer-type-without-the-api-server) that does not require an LFS API server.
 
 `git-lfs-remote-oci` supports all `git-lfs` features that involve a remote.
+
+`git-lfs-remote-oci` does not require `git-remote-oci`.
 
 ## Purpose
 
@@ -55,6 +59,7 @@ The documentation for `git-remote-oci` and `git-lfs-remote-oci` is organized as 
 - **[User Guide](docs/user-guide.md)**: provides usage examples.
 - **[OCI Specification](docs/spec/oci-spec.md)**: defines the Git OCI artifact specification.
 - **[Data Model](docs/spec/data-model.md)**: extends the specification by discussing the data model, intended for developers.
+- **[Sequence Diagrams](docs/diagrams/sequence/)**: outline how `git`, `git-remote-oci`, `git-lfs`, and `git-lfs-remote-oci` interact with one another.
 
 ## How to Contribute
 
