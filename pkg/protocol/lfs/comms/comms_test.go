@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/act3-ai/gnoci/internal/testutils"
 	"github.com/act3-ai/gnoci/pkg/protocol/lfs"
+	"github.com/act3-ai/gnoci/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
