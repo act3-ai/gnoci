@@ -29,3 +29,33 @@ tasks:
     desc: "Run release process."
     cmds:
       - ./release.sh -i
+
+  lint-go:
+    desc: "Lint go files"
+    cmds:
+      - dagger call lint go
+
+  lint-govuln:
+    desc: "Run govulncheck"
+    cmds:
+      - dagger call lint vulncheck
+
+  lint-shell:
+    desc: "Lint shell scripts"
+    cmds:
+      - dagger call lint shell
+
+  lint-yaml:
+    desc: "Lint yaml files"
+    cmds:
+      - dagger call lint yaml
+
+  lint-markdown:
+    desc: "Lint markdown files"
+    cmds:
+      - dagger call lint markdown
+
+  lint:
+    desc: "Run all linters"
+    cmds:
+      - dagger call lint all
