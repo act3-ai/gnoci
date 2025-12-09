@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"dagger/gnoci/internal/dagger"
+	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // Run tests.
@@ -45,68 +47,66 @@ func (t *Test) Unit(ctx context.Context,
 // Push pushes a git repository to an OCI registry.
 //
 //nolint:wrapcheck
-// func (t *Test) Push(ctx context.Context,
-// 	// Git reference to test repository
-// 	gitRef *dagger.GitRef,
-// ) (string, error) {
-// 	// start registry
-// 	regService := registryService()
-// 	regService, err := regService.Start(ctx)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	defer regService.Stop(ctx) //nolint:errcheck
-
-// 	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	regHost := strings.TrimPrefix(regEndpoint, "http://")
-
-// 	const srcDir = "src"
-// 	return t.containerWithHelpers(ctx, gitRef.Tree()).
-// 		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
-// 		WithWorkdir(srcDir).
-// 		WithServiceBinding("registry", regService).
-// 		With(configureLFSOCIFunc(regHost)).
-// 		WithExec([]string{"git", "push", "oci://" + regHost + "/repo/test:sync", "--all"}).
-// 		Stdout(ctx)
-
-// 	// configure git
-
-// 	// configure git-lfs
-
-// 	// connect to registry
-
-// 	// push
-
-// 	// get metadata
-
-// 	// return metadata on stdout
-
-// 	// return "", fmt.Errorf("not implemented")
-// }
-
-// containerWithHelpers creates a container with the dependencies necessary to test
-// git-remote-oci and git-lfs-remote-oci.
-func (t *Test) containerWithHelpers(ctx context.Context,
-	// Source code directory
+func (t *Test) Push(ctx context.Context,
+	// Git reference to test repository
+	gitRef *dagger.GitRef,
+	// source code directory
 	// +defaultPath="/"
-	src *dagger.Directory) *dagger.Container {
-	platform := dagger.Platform("linux/amd64")
-	version := "test-dev"
+	src *dagger.Directory,
+) (string, error) {
+	// start registry
+	regService := registryService()
+	regService, err := regService.Start(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer regService.Stop(ctx) //nolint:errcheck
 
-	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git", "git-lfs"}}).
+	regEndpoint, err := regService.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
+	if err != nil {
+		return "", err
+	}
+	regHost := strings.TrimPrefix(regEndpoint, "http://")
+
+	const srcDir = "src"
+
+	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
 		Container().
-		WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, src, version, platform)).
-		WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, src, version, platform)).
-		WithExec([]string{"git", "config", "--global", "user.name", "dev-test"}).
-		WithExec([]string{"git", "config", "--global", "user.email", "devtest@example.com"}).
-		WithExec([]string{"git", "config", "--global", "init.defaultbranch", "main"})
+		With(t.withGit(ctx, src)).
+		With(withGitConfig()).
+		With(withGnociConfig(regHost)).
+		WithDirectory(srcDir, gitRef.Tree(dagger.GitRefTreeOpts{Depth: -1})).
+		WithWorkdir(srcDir).
+		WithServiceBinding("registry", regService).
+		WithExec([]string{"git", "push", ociRef(regHost, "repo/test:sync"), "--all"}).
+		CombinedOutput(ctx)
 }
 
-// configureLFSOCIFunc configures a git repository with an OCI remote.
-func configureLFSOCIFunc(ociRemote string) func(c *dagger.Container) *dagger.Container {
+// withGit builds and installs git-remote-oci in a container.
+func (t *Test) withGit(ctx context.Context, src *dagger.Directory) func(c *dagger.Container) *dagger.Container {
+	return func(c *dagger.Container) *dagger.Container {
+		return c.WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, src, "test-dev", dagger.Platform("linux/amd64")))
+	}
+}
+
+// withGitConfig configures a git repository.
+func withGitConfig() func(c *dagger.Container) *dagger.Container {
+	return func(c *dagger.Container) *dagger.Container {
+		return c.WithExec([]string{"git", "config", "--global", "user.name", "dev-test"}).
+			WithExec([]string{"git", "config", "--global", "user.email", "devtest@example.com"}).
+			WithExec([]string{"git", "config", "--global", "init.defaultbranch", "main"})
+	}
+}
+
+// withGitLFS builds and installs git-lfs in an container.
+func (t *Test) withGitLFS(ctx context.Context, src *dagger.Directory) func(c *dagger.Container) *dagger.Container {
+	return func(c *dagger.Container) *dagger.Container {
+		return c.WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, src, "test-dev", dagger.Platform("linux/amd64")))
+	}
+}
+
+// withLFSConfig configures a git-lfs enabled repository with an OCI remote.
+func withLFSConfig(ociRemote string) func(c *dagger.Container) *dagger.Container {
 	return func(c *dagger.Container) *dagger.Container {
 		return c.WithExec([]string{"git", "config", "lfs.standalonetransferagent", "oci"}).
 			WithExec([]string{"git", "config", "lfs.customtransfer.oci.path", gitLFSExecName}).
@@ -129,15 +129,18 @@ func registryService() *dagger.Service {
 		AsService()
 }
 
-// func (t *Test) TestCtr(ctx context.Context) (*dagger.Container, error) {
-// 	ctr, err := t.containerWithHelpers(ctx)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to create container: %w", err)
-// 	}
+// withGnociConfig injects a gnoci configuration file with HTTP enabled.
+func withGnociConfig(regHost string) func(*dagger.Container) *dagger.Container {
+	cfgPath := filepath.Join("/.config", "gnoci", "config.yaml")
+	cfg := dag.File("config.yaml", fmt.Sprintf("# Git o(n) OCI Configuration\napiVersion: gnoci.act3-ai.io/v1alpha1\nkind: Configuration\nregistryConfig:\n  registries:\n    %s:\n      plainHTTP: true\n", regHost))
 
-// 	ctr = ctr.Terminal()
+	return func(c *dagger.Container) *dagger.Container {
+		return c.WithFile(cfgPath, cfg).
+			WithEnvVariable("GNOCI_CONFIG", cfgPath)
+	}
+}
 
-// 	ctr.WithExec([]string{"git", "--version"})
-
-// 	return ctr, nil
-// }
+// ociRef builds an oci://<regHost>/<repoSlug/ reference.
+func ociRef(regHost string, repoSlug string) string {
+	return "oci://" + regHost + "/" + repoSlug
+}
