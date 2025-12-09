@@ -18,7 +18,7 @@ This project has three main objectives:
 
 The data model for storing Git repositories in OCI compliant registries follows the [OCI image-spec](https://github.com/opencontainers/image-spec/blob/main/spec.md). In particular, the data model is packaged as defined by the [image manifest spec guidelines for artifact usage](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidelines-for-artifact-usage).
 
-Refer to the [data model](docs/design/oci-data-model.md).
+Refer to the [Git OCI Artifact Specification](docs/spec/oci-spec.md).
 
 ## Git Remote Helper for OCI Registries
 
@@ -36,6 +36,8 @@ Refer to the [data model](docs/design/oci-data-model.md).
 
 `git-lfs-remote-oci` is a Git LFS [custom transfer agent](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md) that implements the Git LFS [custom transfer protocol](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#protocol). Specifically, it is a [standalone transfer agent](https://github.com/git-lfs/git-lfs/blob/main/docs/custom-transfers.md#using-a-custom-transfer-type-without-the-api-server) that does not require an LFS API server.
 
+`git-lfs-remote-oci` supports all `git-lfs` features that involve a remote.
+
 ## Purpose
 
 Why use OCI registries as remote storage for Git repositories?
@@ -44,22 +46,24 @@ Existing tools, such as [Zarf](https://zarf.dev/) and the [ASCE Data Tool](https
 
 For more information see the [project proposal](./docs/proposal/proposal.md).
 
-## Code Coverage
-
-![Coverage](docs/figures/badges/coverage/coverage-treemap.svg)
-
 ## Documentation
 
-The documentation for `git-remote-oci` is organized as follows:
+The documentation for `git-remote-oci` and `git-lfs-remote-oci` is organized as follows:
 
-- **[Quick Start Guide](docs/quick-start-guide.md)**: provides documentation of installing and configuring `git-remote-oci` and `git-lfs-remote-oci`.
+- **[Installation Guide](docs/installation-guide.md)**: how to install `git-remote-oci` and `git-lfs-remote-oci` from source.
+- **[Quick Start Guide](docs/quick-start-guide.md)**: provides initial usage of and configuration for `git-remote-oci` and `git-lfs-remote-oci`.
 - **[User Guide](docs/user-guide.md)**: provides usage examples.
-- **[Data Model](docs/design/oci-data-model.md)**: defines the data model used to store Git repositories in OCI compliant registries.
+- **[OCI Specification](docs/spec/oci-spec.md)**: defines the Git OCI artifact specification.
+- **[Data Model](docs/spec/data-model.md)**: extends the specification by discussing the data model, intended for developers.
 
 ## How to Contribute
 
-- **[Developer Guide](docs/developer-guide.md)**: detailed guide for contributing to the Git Remote Helper for OCI Registries repository.
+- **[Developer Guide](docs/developer-guide.md)**: detailed guide for contributing to this project.
 
 ## Support
 
-- **[Troubleshooting FAQ](docs/troubleshooting-faq.md)**: consult list of frequently asked questions and their answers.
+- **[Troubleshooting FAQ](docs/troubleshooting-faq.md)**: frequently asked questions and their answers.
+
+## Code Coverage
+
+![Coverage](docs/figures/badges/coverage/coverage-treemap.svg)

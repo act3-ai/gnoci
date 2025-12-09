@@ -104,6 +104,28 @@ flowchart LR
     class packfile_3_3,SyncM_3_c,LFSM_3_c,LFSL_3_3,LFSL_3_1,LFSL_3_2,packfile_3_1,packfile_3_2 update
 ```
 
+### Git Artifact Creation and Updates
+
+#### Initial Git Artifact
+
+When pushing the Git OCI artifact to a remote OCI registry for the first time, i.e. the [OCI tag reference](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#checking-if-content-exists-in-the-registry) does not exist, a [packfile](https://git-scm.com/docs/pack-format) is created containing all git objects reachable from the references pushed. In effect, the packfile contains the complete git history for each reference. This packfile serves as the base layer for subsequent updates. Additionally, each tag or head reference pushed is added to the artifact config alongside the digest of the packfile layer created.
+
+#### Subsequent Git Updates
+
+If a Git OCI artifact reference already exists, `git-remote-oci` creates a single ["thin" pack](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin) containing reachable objects not included in any existing packfile layers. Any reference updates are reflected in the OCI config.
+
+### LFS Artifact Creation and Updates
+
+An LFS artifact is only created if a local repository has `git-lfs` configured.
+
+#### Initial LFS Artifact
+
+The initial LFS artifact is created the first time a `git` commit object contains one or more `git-lfs` tracked files. The manifest contains a single layer for each LFS file.
+
+#### Subsequent LFS Updates
+
+If an LFS artifact already exists, additional LFS files are appended to the LFS manifest layers.
+
 ### Data Race Prevention
 
 By using OCI tag references as the git remote reference format, distributing the Git OCI artifact is susceptible to data race issues if two users are pushing to the same remote reference simultaneously. To avoid such a conflit, `git-remote-oci` takes the following measures:

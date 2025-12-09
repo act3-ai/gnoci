@@ -10,14 +10,21 @@ It is strongly recommended readers of this document are familiar with the follow
 
 ## Table of Contents
 
-1. [Notational Conventions](#notational-conventions)
-2. [Overview](#overview)
-3. [Specification](#specification)
-     - [OCI Manifest](#oci-manifest)
-       - [Example OCI Manifest](#example-oci-manifest)
-     - [OCI Config](#oci-config)
-       - [Example OCI Config](#example-oci-config)
-     - [OCI Layer](#oci-layer)
+- [Git as OCI Artifact Specification](#git-as-oci-artifact-specification)
+  - [Table of Contents](#table-of-contents)
+  - [Notational Conventions](#notational-conventions)
+  - [Overview](#overview)
+  - [Specification](#specification)
+    - [OCI Manifest](#oci-manifest)
+      - [Example OCI Manifest](#example-oci-manifest)
+    - [OCI Config](#oci-config)
+      - [Config Format](#config-format)
+      - [Example OCI Config](#example-oci-config)
+    - [OCI Layer](#oci-layer)
+    - [LFS OCI Artifact Manifest](#lfs-oci-artifact-manifest)
+      - [Example LFS OCI Manifest](#example-lfs-oci-manifest)
+    - [LFS Artifact Config](#lfs-artifact-config)
+    - [LFS Artifact Layers](#lfs-artifact-layers)
 
 ## Notational Conventions
 
@@ -40,6 +47,7 @@ The manifest specificification follows the [Guidelines for Artifact Usage](https
 
 A Git OCI artifact manifest:
 
+- MUST set `mediaType` to `application/vnd.oci.image.manifest.v1+json`.
 - MUST set `artifactType` to `application/vnd.ai.act3.git.repo.v1+json`.
 - MUST set `config.mediaType` to `application/vnd.ai.act3.git.config.v1+json`.
 - MUST contain one or more layers with `mediaType` set to `application/vnd.ai.act3.git.pack.v1`.
@@ -158,35 +166,22 @@ A Git OCI artifact layer:
     - Thin packfiles MUST contain a complete Git tree for layer ranges `[0:n]`, i.e. no dangling leaves.
     - Thin packfiles SHOULD not contain duplicate data among themselves.
 
-### Git Artifact Creation and Updates
+### LFS OCI Artifact Manifest
 
-#### Initial Git Artifact
+The specification uses the OCI [referrers API](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#listing-referrers) for managing `git-lfs` tracked files. As such, if a local repository has `git-lfs` configured the [Git OCI manifest](#oci-manifest) descriptor is added as a `subject` in the LFS artifact manifest.
 
-When pushing the Git OCI artifact to a remote OCI registry for the first time, i.e. the [OCI tag reference](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#checking-if-content-exists-in-the-registry) does not exist, a [packfile](https://git-scm.com/docs/pack-format) is created containing all git objects reachable from the references pushed. In effect, the packfile contains the complete git history for each reference. This packfile serves as the base layer for subsequent updates. Additionally, each tag or head reference pushed is added to the artifact config alongside the digest of the packfile layer created.
+A LFS OCI artifact manifest:
 
-#### Subsequent Git Updates
+- MUST set `mediaType` to `application/vnd.oci.image.manifest.v1+json`.
+- MUST set `artifactType` to `application/vnd.ai.act3.git-lfs.repo.v1+json`.
+- MUST set `config.mediaType` to `application/vnd.oci.empty.v1+json`.
+  - whose digest is `sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a`
+  - with size `2`
+  - and data `"e30="` (an empty JSON struct `{}`)
+- MUST contain one or more layers with `mediaType` set to `application/vnd.ai.act3.git-lfs.object.v1`
+- MUST contain a `subject` OCI descriptor that is equal to the [Git OCI Artifact Manifest](#oci-manifest) tagged descriptor.
 
-If a Git OCI artifact reference already exists, `git-remote-oci` creates a single ["thin" pack](https://git-scm.com/docs/git-pack-objects#Documentation/git-pack-objects.txt---thin) containing reachable objects not included in any existing packfile layers. Any reference updates are reflected in the OCI config.
-
-## LFS OCI Artifact Design
-
-The specification uses the OCI [referrers API](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#listing-referrers) for managing `git-lfs` tracked files. As such, if a local repository has `git-lfs` configured the [Git OCI manifest](#git-artifact-manifest) descriptor is added as a `subject` in the LFS artifact manifest.
-
-### LFS Artifact Manifest
-
-The LFS OCI manifest defines two custom types:
-
-- `application/vnd.ai.act3.git-lfs.repo.v1+json` - Manifest `artifactType`
-- `application/vnd.ai.act3.git-lfs.object.v1` - Layer `mediaType`
-
-The specification does not require a configuration, instead the `config` descriptor is set to the empty descriptor.
-
-The same annotations as the [Git artifact manifest](#git-artifact-manifest) are defined:
-
-- `vnd.ai.act3.git-remote-oci.version` - The version of the `git-remote-oci` remote helper that created the artifact.
-- `org.opencontainers.image.created` - Set to `1970-01-01T00:00:00Z`
-
-#### Example LFS Manifest
+#### Example LFS OCI Manifest
 
 ```json
 {
@@ -236,22 +231,16 @@ The same annotations as the [Git artifact manifest](#git-artifact-manifest) are 
 
 ### LFS Artifact Config
 
+A LFS OCI artifact config:
+
+- MUST be identified by the `mediaType` `application/vnd.oci.empty.v1+json`.
+- MUST be an empty JSON object `{}`.
+
 The specification does not require a configuration, instead the `config` descriptor is set to the empty descriptor.
 
 ### LFS Artifact Layers
 
-LFS artifact layers are identified by the `application/vnd.ai.act3.git-lfs.object.v1` `mediaType`. Each layer contains the contents of a single `git-lfs` tracked file, fetched on-demand when a `git-lfs` pointer file needs to be resolved to the full file contents.
+A LFS OCI artifact layer:
 
-### LFS Artifact Creation and Updates
-
-An LFS artifact is only created if a local repository has `git-lfs` configured.
-
-#### Initial LFS Artifact
-
-The initial LFS artifact is created the first time a `git` commit object contains one or more `git-lfs` tracked files. The manifest contains a single layer for each LFS file.
-
-#### Subsequent LFS Updates
-
-If an LFS artifact already exists, additional LFS files are appended to the LFS manifest layers.
-
-
+- MUST be identified by the `mediaType` `application/vnd.ai.act3.git-lfs.object.v1`.
+- MUST contain the contents of a `git-lfs` tracked file (not a pointer file).

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This Quick Start Guide is for users who have already [installed Git Remote Helper for OCI Registries](installation-guide.md) and who are ready to take advantage of its features.
+This Quick Start Guide is for users who have already [installed git-remote-oci and/or git-lfs-remote-oci](installation-guide.md) and are ready to take advantage of its features.
 
 You will be guided through the steps necessary to begin using `git-remote-oci` and/or `git-lfs-remote-oci`.
 
@@ -11,14 +11,16 @@ You will be guided through the steps necessary to begin using `git-remote-oci` a
 
 ## Configuration
 
-### Recommanded git-remote-oci Configuration
+### Recommended git-remote-oci Configuration
 
-It is recommended to configure an OCI registry tag reference as a Git remote:
+It is recommended to configure an OCI registry tag reference as a Git remote. Without this, users *must* specify the `oci://` protocol to invoke `git-remote-oci` (Git discovers this on `$PATH`, following the convention `git-remote-<protocol>`).
 
 ```console
 $ cd path/to/local/repo
-$ git remote add <name> oci://<registry>/<repository>/<name>:tag
+$ git remote add <shortname> oci://<registry>/<repository>/<name>:tag
 ```
+
+For more information on OCI references see the [OCI Distribution Spec: Pulling Manifest](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests), note that digest references are *not* acceptable for our use case.
 
 Whenever `git` requires or allows a remote option, simply use `<name>`, e.g. `git push <name>`.
 
