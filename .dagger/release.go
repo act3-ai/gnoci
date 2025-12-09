@@ -23,7 +23,7 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 
 	_ = g.BuildAllPlatforms(ctx, src, version, buildPlatforms)
 
-	if _, err := g.Test().All(ctx, src); err != nil {
+	if _, err := g.Test(src).All(ctx); err != nil {
 		return nil, err
 	}
 
@@ -43,7 +43,7 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 
 	src = src.WithChanges(release.Prepare(version))
 	// src = src.WithChanges(g.Generate(src))
-	src = src.WithChanges(g.Test().CoverageDocs(ctx, src))
+	src = src.WithChanges(g.Test(src).CoverageDocs(ctx))
 
 	return src.Changes(gitRef.Tree()), nil
 }

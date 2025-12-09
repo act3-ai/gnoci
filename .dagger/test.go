@@ -9,22 +9,28 @@ import (
 )
 
 // Run tests.
-func (g *Gnoci) Test() *Test {
+func (g *Gnoci) Test(
+	// source code directory
+	// +defaultPath="/"
+	src *dagger.Directory,
+) *Test {
 	return &Test{
 		Gnoci: g,
+		Src:   src,
 	}
 }
 
 // Test organizes testing operations.
 type Test struct {
 	*Gnoci
+
+	// +private
+	Src *dagger.Directory
 }
 
 // Run all tests.
-func (t *Test) All(ctx context.Context,
-	src *dagger.Directory,
-) (string, error) {
-	unitResults, unitErr := t.Unit(ctx, src)
+func (t *Test) All(ctx context.Context) (string, error) {
+	unitResults, unitErr := t.Unit(ctx)
 
 	// TODO: add functional  tests here
 
@@ -34,80 +40,60 @@ func (t *Test) All(ctx context.Context,
 }
 
 // Run unit tests.
-func (t *Test) Unit(ctx context.Context,
-	src *dagger.Directory,
-) (string, error) {
+func (t *Test) Unit(ctx context.Context) (string, error) {
 	return dag.Go(). //nolint:wrapcheck
-				WithSource(src).
+				WithSource(t.Src).
 				Container().
 				WithExec([]string{"go", "test", "./..."}).
 				Stdout(ctx)
 }
 
-// func (t *Test) PushCloneSimple(ctx context.Context,
-// 	// source code directory
-// 	// +defaultPath="/"
-// 	src *dagger.Directory,
-// ) (string, error) {
-// 	testDir, err := os.MkdirTemp("", "test-push-clone-simple-*")
-// 	if err != nil {
-// 		return "", fmt.Errorf("initializing test repository directory: %w", err)
-// 	}
-// 	// defer os.RemoveAll(testDir)
+func (t *Test) Functional(ctx context.Context) (string, error) {
 
-// 	ref, err := SimpleRepo(testDir)
-// 	if err != nil {
-// 		return "", fmt.Errorf("building test repository: %w", err)
-// 	}
-
-// 	gitRef := dag.Directory().
-// 		Directory(testDir).
-// 		AsGit().
-// 		Ref(ref.String())
-
-// 	return t.PushClone(ctx, src, gitRef)
-// }
+}
 
 // PushClone push to then clone from an OCI registry.
 func (t *Test) PushClone(ctx context.Context,
-	// source code directory
-	// +defaultPath="/"
-	src *dagger.Directory,
 	// Git repository
 	gitRepo *dagger.Directory,
-) (string, error) {
+	// git references to push
+	refs []string,
+	// git OCI remote repository slug
+	ociSlug string,
+) error {
 	// start registry
 	registry := registryService()
 	registry, err := registry.Start(ctx)
 	if err != nil {
-		return "", fmt.Errorf("starting registry service: %w", err)
+		return fmt.Errorf("starting registry service: %w", err)
 	}
 	defer registry.Stop(ctx) //nolint:errcheck
 
-	const ociSlug = "repo/test:clone"
-
-	pushOut, err := t.Push(ctx, src, gitRepo, registry, ociSlug)
+	_, err = t.Push(ctx, gitRepo, refs, registry, ociSlug)
 	if err != nil {
-		return pushOut, fmt.Errorf("failed to push repository to OCI: %w", err)
+		return fmt.Errorf("failed to push repository to OCI: %w", err)
 	}
 
-	cloneOut, err := t.Clone(ctx, src, registry, ociSlug)
+	_, err = t.Clone(ctx, registry, ociSlug)
 	if err != nil {
-		return pushOut, fmt.Errorf("failed to clone repository from OCI: %w", err)
+		return fmt.Errorf("failed to clone repository from OCI: %w", err)
 	}
 
-	return strings.Join([]string{pushOut, cloneOut}, "\n\n"), nil
+	return nil
+}
+
+func (t *Test) ValidateResult(srcRefs []string, result *dagger.Directory) error {
+
 }
 
 // Push pushes a git repository to an OCI registry.
 //
 //nolint:wrapcheck
 func (t *Test) Push(ctx context.Context,
-	// source code directory
-	// +defaultPath="/"
-	src *dagger.Directory,
 	// Git repository
 	gitRepo *dagger.Directory,
+	// git references to push
+	refs []string,
 	// registry service
 	registry *dagger.Service,
 	// git OCI remote repository slug
@@ -122,13 +108,13 @@ func (t *Test) Push(ctx context.Context,
 	const srcDir = "src"
 	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
 		Container().
-		With(t.withGit(ctx, src)).
+		With(t.withGit(ctx)).
 		With(withGitConfig()).
 		With(withGnociConfig(regHost)).
 		WithDirectory(srcDir, gitRepo).
 		WithWorkdir(srcDir).
 		WithServiceBinding("registry", registry).
-		WithExec([]string{"git", "push", ociRef(regHost, ociSlug), "--all"}).
+		WithExec(append([]string{"git", "push", ociRef(regHost, ociSlug)}, refs...)).
 		CombinedOutput(ctx)
 }
 
@@ -136,37 +122,36 @@ func (t *Test) Push(ctx context.Context,
 //
 //nolint:wrapcheck
 func (t *Test) Clone(ctx context.Context,
-	// source code directory
-	// +defaultPath="/"
-	src *dagger.Directory,
 	// registry service
 	registry *dagger.Service,
 	// git OCI remote repository slug
 	ociSlug string,
-) (string, error) {
+) (*dagger.Directory, error) {
 	regEndpoint, err := registry.Endpoint(ctx, dagger.ServiceEndpointOpts{Scheme: "http"})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	regHost := strings.TrimPrefix(regEndpoint, "http://")
 
-	const srcDir = "src"
+	_, tag, found := strings.Cut(ociSlug, ":")
+	if !found {
+		return nil, fmt.Errorf("malformed oci slug %s, expected <repo>:<tag>", ociSlug)
+	}
 
 	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
 		Container().
-		With(t.withGit(ctx, src)).
+		With(t.withGit(ctx)).
 		With(withGitConfig()).
 		With(withGnociConfig(regHost)).
-		WithWorkdir(srcDir).
 		WithServiceBinding("registry", registry).
 		WithExec([]string{"git", "clone", ociRef(regHost, ociSlug)}).
-		CombinedOutput(ctx)
+		Directory(tag), nil
 }
 
 // withGit builds and installs git-remote-oci in a container.
-func (t *Test) withGit(ctx context.Context, src *dagger.Directory) func(c *dagger.Container) *dagger.Container {
+func (t *Test) withGit(ctx context.Context) func(c *dagger.Container) *dagger.Container {
 	return func(c *dagger.Container) *dagger.Container {
-		return c.WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, src, "test-dev", dagger.Platform("linux/amd64")))
+		return c.WithFile(filepath.Join("usr", "local", "bin", gitExecName), t.BuildGit(ctx, t.Src, "test-dev", dagger.Platform("linux/amd64")))
 	}
 }
 
@@ -180,9 +165,9 @@ func withGitConfig() func(c *dagger.Container) *dagger.Container {
 }
 
 // withGitLFS builds and installs git-lfs in an container.
-func (t *Test) withGitLFS(ctx context.Context, src *dagger.Directory) func(c *dagger.Container) *dagger.Container {
+func (t *Test) withGitLFS(ctx context.Context) func(c *dagger.Container) *dagger.Container {
 	return func(c *dagger.Container) *dagger.Container {
-		return c.WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, src, "test-dev", dagger.Platform("linux/amd64")))
+		return c.WithFile(filepath.Join("usr", "local", "bin", gitLFSExecName), t.BuildGitLFS(ctx, t.Src, "test-dev", dagger.Platform("linux/amd64")))
 	}
 }
 
@@ -224,4 +209,9 @@ func withGnociConfig(regHost string) func(*dagger.Container) *dagger.Container {
 // ociRef builds an oci://<regHost>/<repoSlug/ reference.
 func ociRef(regHost string, repoSlug string) string {
 	return "oci://" + regHost + "/" + repoSlug
+}
+
+func ctrWithGit() *dagger.Container {
+	return dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
+		Container()
 }

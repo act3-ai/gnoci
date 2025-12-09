@@ -7,14 +7,14 @@ import (
 	"github.com/google/uuid"
 )
 
-const src = "src"
+const srcDir = "src"
 
 // Git repository builder.
 func (t *Test) RepoBuilder() *RepoBuilder {
 	ctr := dag.Alpine(dagger.AlpineOpts{Packages: []string{"git"}}).
 		Container().
 		With(withGitConfig()).
-		WithWorkdir(src).
+		WithWorkdir(srcDir).
 		WithExec([]string{"git", "init"})
 
 	return &RepoBuilder{
