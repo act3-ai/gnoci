@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
@@ -20,6 +19,7 @@ func HandleList(ctx context.Context, local git.Repository, remote model.Modeler,
 	if err != nil {
 		return fmt.Errorf("parsing list request: %w", err)
 	}
+	slog.DebugContext(ctx, "handling list request", slog.Bool("forPush", req.ForPush), slog.Bool("localRepoAccess", local != nil))
 
 	var headRef *plumbing.Reference
 	if !req.ForPush && local != nil {
@@ -41,11 +41,15 @@ func HandleList(ctx context.Context, local git.Repository, remote model.Modeler,
 
 	// list remote branch references
 	for k, v := range headRefs {
+		slog.DebugContext(ctx, "handling head reference", slog.String("ref", k.String()))
 		// list HEAD if one exists locally
-		if headRef != nil && (k.String() == strings.TrimPrefix(headRef.Name().String(), "refs/heads/")) {
+		if headRef != nil && (k.String() == headRef.Name().String()) {
+			slog.DebugContext(ctx, "adding head reference for HEAD")
 			result := gittypes.ListResponse{
-				Reference: plumbing.ReferenceName(fmt.Sprintf("@%s", headRef.Name())),
-				Commit:    "HEAD",
+				// HACK: HEAD is a symbolic reference, we should update ListResponse
+				// to be a bit more generic when handling these, check git list docs
+				Reference: "HEAD",
+				Commit:    fmt.Sprintf("@%s", headRef.Name()),
 			}
 			results = append(results, result)
 		}

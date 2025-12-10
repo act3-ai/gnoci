@@ -108,6 +108,7 @@ func (action *Git) handleCmd(ctx context.Context) (bool, error) {
 	case err != nil:
 		return false, fmt.Errorf("command look ahead: %w", err)
 	}
+	slog.DebugContext(ctx, "read git request", slog.String("request", string(c)))
 
 	// Disregard defined ordering of commands sent by Git, staying robust
 	// to potential changes
@@ -140,12 +141,13 @@ func (action *Git) handleCmd(ctx context.Context) (bool, error) {
 }
 
 // localRepo opens the local repository if it hasn't been opened already.
-func (action *Git) localRepo() (git.Repository, error) {
+func (action *Git) localRepo(ctx context.Context) (git.Repository, error) {
 	if action.local == nil {
 		if action.gitDir == "" {
 			return nil, fmt.Errorf("action.gitDir not defined, unable to open local repository")
 		}
 
+		slog.DebugContext(ctx, "opening local repository")
 		r, err := gogit.PlainOpen(action.gitDir)
 		if err != nil {
 			return nil, fmt.Errorf("opening local repository: %w", err)
@@ -160,8 +162,9 @@ func (action *Git) localRepo() (git.Repository, error) {
 func (action *Git) handleList(ctx context.Context) error {
 	var local git.Repository
 	var err error
+	slog.DebugContext(ctx, "handleList git directory", slog.String("gitDir", action.gitDir))
 	if action.gitDir != "" {
-		local, err = action.localRepo()
+		local, err = action.localRepo(ctx)
 		if err != nil {
 			return err
 		}
@@ -181,7 +184,7 @@ func (action *Git) handleList(ctx context.Context) error {
 
 func (action *Git) handlePush(ctx context.Context) error {
 	// TODO: should we not fully push to the remote until all push batches are resolved locally? Just push the packs?
-	local, err := action.localRepo()
+	local, err := action.localRepo(ctx)
 	if err != nil {
 		return err
 	}
@@ -199,7 +202,7 @@ func (action *Git) handlePush(ctx context.Context) error {
 }
 
 func (action *Git) handleFetch(ctx context.Context) error {
-	local, err := action.localRepo()
+	local, err := action.localRepo(ctx)
 	if err != nil {
 		return err
 	}
