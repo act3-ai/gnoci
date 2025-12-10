@@ -67,7 +67,7 @@ Set Height 700
 Set TypingSpeed 0.09
 Set PlaybackSpeed 1.2
 
-Type "git clone oci://127.0.0.1:5000/demos/push:gnoci"
+Type "git clone oci://127.0.0.1:5000/demos:gnoci"
 Sleep 500ms
 Enter
 Sleep 2s
