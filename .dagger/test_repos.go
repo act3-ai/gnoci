@@ -24,3 +24,19 @@ func (r *Repos) Simple() *dagger.Directory {
 		NewCommit().
 		GitDir()
 }
+
+// A repository with 3 branches, and 3 commit tips.
+func (r *Repos) MultiBranch() *dagger.Directory {
+	return r.Test.RepoBuilder(nil).
+		NewCommit().
+		NewCommit().
+		NewCommit().
+		Branch("foo").
+		NewCommit().
+		NewCommit().
+		Checkout("main").
+		NewCommit().
+		Branch("bar").
+		NewCommit().
+		GitDir()
+}

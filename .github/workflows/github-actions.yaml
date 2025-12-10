@@ -23,4 +23,4 @@ jobs:
         run: dagger call lint all --src=.
 
       - name: Test
-        run: dagger call test all --src=.
+        run: dagger call test all

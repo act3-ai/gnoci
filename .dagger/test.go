@@ -30,14 +30,19 @@ type Test struct {
 }
 
 // Run all tests.
-func (t *Test) All(ctx context.Context) (string, error) {
-	unitResults, unitErr := t.Unit(ctx)
+func (t *Test) All(ctx context.Context) error {
+	var errs []error
+	_, err := t.Unit(ctx)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("Unit Tests: %w\n\n", err))
+	}
 
-	// TODO: add functional  tests here
+	err = t.Functional(ctx)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("Functional Tests: %w", err))
+	}
 
-	out := "Unit Test Results:\n" + unitResults
-
-	return out, unitErr // TODO: use errors.Join when functional tests are added
+	return errors.Join(errs...)
 }
 
 // Run unit tests.
@@ -49,6 +54,7 @@ func (t *Test) Unit(ctx context.Context) (string, error) {
 				Stdout(ctx)
 }
 
+// Run functional tests
 func (t *Test) Functional(ctx context.Context) error {
 	// start registry
 	registry := registryService()
@@ -58,46 +64,46 @@ func (t *Test) Functional(ctx context.Context) error {
 	}
 	defer registry.Stop(ctx) //nolint:errcheck
 
+	var errs []error
+
 	simpleSlug := "test/simple:src"
-	simpleRepo := t.Repos().Simple()
-	refPairs, err := t.Eval().Refs(ctx, simpleRepo)
+	err = t.PushFetchPullClone(ctx, t.Repos().Simple(), registry, simpleSlug)
 	if err != nil {
-		return fmt.Errorf("getting commit reference pairs from simple source repository: %w", err)
+		errs = append(errs, fmt.Errorf("Simple: %w", err))
 	}
 
-	_, refs, err := splitRefPairs(refPairs)
+	multiBranchSlug := "test/multi-branch:src"
+	err = t.PushFetchPullClone(ctx, t.Repos().MultiBranch(), registry, multiBranchSlug)
 	if err != nil {
-		return fmt.Errorf("getting refs from commit reference pairs: %w", err)
+		errs = append(errs, fmt.Errorf("MultiBranch: %w", err))
 	}
 
-	_, err = t.Push(ctx, simpleRepo, refs, registry, simpleSlug)
-	if err != nil {
-		return fmt.Errorf("failed to push repository to OCI: %w", err)
-	}
-
-	err = t.FromRemote(ctx, simpleRepo, refPairs, registry, simpleSlug)
-	if err != nil {
-		return fmt.Errorf("FromRemote: Simple: %w", err)
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
-// FromRemote assumes a remote exists and tests "fetching" operations, e.g.
-// fetch, pull, and clone.
-func (t *Test) FromRemote(ctx context.Context,
+// PushFetchPullClone pushes to a remote and tests "fetching" operations, e.g.
+// fetch, pull, and clone; independently.
+func (t *Test) PushFetchPullClone(ctx context.Context,
 	// Git repository
 	gitRepo *dagger.Directory,
-	// git 'commit SP ref' pairs to fetch and pull
-	refPairs []string,
 	// registry service
 	registry *dagger.Service,
 	// git OCI remote repository slug
 	ociSlug string,
 ) error {
+	refPairs, err := t.Eval().Refs(ctx, gitRepo)
+	if err != nil {
+		return fmt.Errorf("getting commit reference pairs from simple source repository: %w", err)
+	}
+
 	commits, refs, err := splitRefPairs(refPairs)
 	if err != nil {
 		return fmt.Errorf("getting refs from commit reference pairs: %w", err)
+	}
+
+	_, err = t.Push(ctx, gitRepo, refs, registry, ociSlug)
+	if err != nil {
+		return fmt.Errorf("failed to push repository to OCI: %w", err)
 	}
 
 	var errs []error
@@ -127,39 +133,6 @@ func (t *Test) FromRemote(ctx context.Context,
 
 	return errors.Join(errs...)
 }
-
-// PushClone evaluates a push to then clone from an OCI registry.
-// func (t *Test) PushClone(ctx context.Context,
-// 	// Git repository
-// 	gitRepo *dagger.Directory,
-// 	// git 'commit SP ref' pairs to push
-// 	refPairs []string,
-// 	// registry service
-// 	registry *dagger.Service,
-// 	// git OCI remote repository slug
-// 	ociSlug string,
-// ) error {
-// 	refs, err := refsFromRefPair(refPairs)
-// 	if err != nil {
-// 		return fmt.Errorf("getting refs from commit reference pairs: %w", err)
-// 	}
-
-// 	_, err = t.Push(ctx, gitRepo, refs, registry, ociSlug)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to push repository to OCI: %w", err)
-// 	}
-
-// 	result, err := t.Clone(ctx, registry, ociSlug)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to clone repository from OCI: %w", err)
-// 	}
-
-// 	if err := t.Eval().ValidateRefs(ctx, refPairs, result); err != nil {
-// 		return fmt.Errorf("evaluating result: %w", err)
-// 	}
-
-// 	return nil
-// }
 
 // Push pushes a git repository to an OCI registry.
 //
@@ -237,15 +210,21 @@ func (t *Test) Pull(ctx context.Context,
 	}
 	regHost := strings.TrimPrefix(regEndpoint, "http://")
 
-	return ctrWithGit().
+	ctr := ctrWithGit().
 		With(t.withGitRemoteHelper(ctx)).
 		With(withGitConfig()).
 		With(withGnociConfig(regHost)).
 		WithServiceBinding("registry", registry).
 		WithWorkdir(srcDir).
-		WithExec([]string{"git", "init"}).
-		WithExec(append([]string{"git", "pull", ociRef(regHost, ociSlug)}, refs...)).
-		Directory(".", dagger.ContainerDirectoryOpts{Expand: true}), nil
+		WithExec([]string{"git", "init"})
+
+		// TODO: pulls are weird, we cannot be merging unrealated histories
+	for _, ref := range refs {
+		ctr = ctr.
+			WithExec(append([]string{"git", "pull", ociRef(regHost, ociSlug)}, ref))
+	}
+
+	return ctr.Directory(".", dagger.ContainerDirectoryOpts{Expand: true}), nil
 }
 
 // Clone clones a git repository from an OCI registry.

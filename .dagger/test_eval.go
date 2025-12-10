@@ -40,7 +40,19 @@ func (e *Eval) Refs(ctx context.Context,
 		return nil, fmt.Errorf("getting git head and tag references: %w", err)
 	}
 
-	return strings.Split(strings.TrimSpace(out), "\n"), nil
+	return sortMainFirst(strings.Split(strings.TrimSpace(out), "\n")), nil
+}
+
+func sortMainFirst(refs []string) []string {
+	if len(refs) > 1 {
+		for i, ref := range refs {
+			if strings.Contains(ref, "ref/heads/main") {
+				refs[0], refs[i] = refs[i], refs[0]
+				break
+			}
+		}
+	}
+	return refs
 }
 
 // Heads returns a slice of all head references (branches) and their commits, as "<commit> SP <reference>".
@@ -57,7 +69,7 @@ func (e *Eval) Heads(ctx context.Context,
 		return nil, fmt.Errorf("getting git head references: %w", err)
 	}
 
-	return strings.Split(out, "\n"), nil
+	return sortMainFirst(strings.Split(out, "\n")), nil
 }
 
 // Tags returns a slice of all tag references and their commits, as "<commit> SP <reference>".
@@ -155,6 +167,9 @@ func (e *Eval) ValidatePacks(ctx context.Context,
 		// 01a6dfffa2aec52e57f4961cf7de8bb01f6f2e0d blob   36 50 112
 		// 0e3c37a3474b43457d77674cf048c7e3be742bd3 tree   73 88 401
 		// b49cb06c3c94f5d791a3aa57525ba94c1d180193 commit 174 125 802
+		// non delta: 8 objects
+		// chain length = 1: 1 object
+		// .git/objects/pack/pack-b66b57cb487a7e255ffe8bf51d2121e754b03630.pack: ok
 		for _, line := range strings.Split(out, "\n") {
 			if strings.Contains(line, "commit") {
 				fields := strings.Fields(line)
@@ -220,17 +235,3 @@ func subset[T any](full []T, size int) []T {
 	})
 	return clone[:size]
 }
-
-// git verify-pack .git/objects/pack/pack-b66b57cb487a7e255ffe8bf51d2121e754b03630.pack -v
-// eef5c05d9e550943cf0b68cef3596527259280e6 blob   36 50 12
-// 260377dc2980a649a9f6208d2ffb002ec6d53efb blob   36 50 62
-// 01a6dfffa2aec52e57f4961cf7de8bb01f6f2e0d blob   36 50 112
-// 5968665a871eb5413468e204c664594c7b069a5a tree   219 211 162
-// 81b6c0c5fe40666a7ae0673578f816ea3007703c tree   12 28 373 1 5968665a871eb5413468e204c664594c7b069a5a
-// 0e3c37a3474b43457d77674cf048c7e3be742bd3 tree   73 88 401
-// 1d424e20e318a5d34c086e5ef39b1c614b816de0 commit 222 156 489
-// 7d206d570b7e697e59594fb251b08d4d444624cc commit 222 157 645
-// b49cb06c3c94f5d791a3aa57525ba94c1d180193 commit 174 125 802
-// non delta: 8 objects
-// chain length = 1: 1 object
-// .git/objects/pack/pack-b66b57cb487a7e255ffe8bf51d2121e754b03630.pack: ok

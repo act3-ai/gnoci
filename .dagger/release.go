@@ -23,7 +23,7 @@ func (g *Gnoci) ReleasePrepare(ctx context.Context,
 
 	_ = g.BuildAllPlatforms(ctx, src, version, buildPlatforms)
 
-	if _, err := g.Test(src).All(ctx); err != nil {
+	if err := g.Test(src).All(ctx); err != nil {
 		return nil, err
 	}
 
