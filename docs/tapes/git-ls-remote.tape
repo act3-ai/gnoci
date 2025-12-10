@@ -1,4 +1,4 @@
-Output planner-metric-main.gif
+Output git-ls-remote.gif
 
 Require git
 Require git-remote-oci
