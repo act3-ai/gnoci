@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 )
+
+const packDir = ".git/objects/pack"
 
 // A collection of utilities for evaluating test results.
 func (t *Test) Eval() *Eval {
@@ -75,19 +78,19 @@ func (e *Eval) Tags(ctx context.Context,
 }
 
 // ValidateResults ensures the expected references and their commits ae in the result git repository.
-func (e *Eval) ValidateResult(ctx context.Context,
+func (e *Eval) ValidateRefs(ctx context.Context,
 	// expected list of '<commit> SP <ref>' (output of git show-ref)
 	expectedCommitRefs []string,
 	// evaluated git repository
 	result *dagger.Directory,
 ) error {
-	srcResolver := make(map[string]string, len(expectedCommitRefs))
+	expectedResolver := make(map[string]string, len(expectedCommitRefs))
 	for _, commitRef := range expectedCommitRefs {
 		commit, ref, err := splitRefPair(commitRef)
 		if err != nil {
 			return fmt.Errorf("splitting expected ref pair: %w", err)
 		}
-		srcResolver[ref] = commit
+		expectedResolver[ref] = commit
 	}
 
 	resultRefs, err := e.Refs(ctx, result)
@@ -103,7 +106,7 @@ func (e *Eval) ValidateResult(ctx context.Context,
 			return fmt.Errorf("splitting result ref pair: %w", err)
 		}
 
-		expectedCommit, ok := srcResolver[ref]
+		expectedCommit, ok := expectedResolver[ref]
 		switch {
 		case !ok:
 			continue
@@ -117,18 +120,79 @@ func (e *Eval) ValidateResult(ctx context.Context,
 	return errors.Join(errs...)
 }
 
-// refsFromRefPair removes the commit portion of a 'commit SP ref'
-// pair, returning a slice of only references.
-func refsFromRefPair(commitRefs []string) ([]string, error) {
-	result := make([]string, 0, len(commitRefs))
-	for _, pair := range commitRefs {
-		_, ref, err := splitRefPair(pair)
-		if err != nil {
-			return nil, fmt.Errorf("removing commit from reference pair: %w", err)
-		}
-		result = append(result, ref)
+func (e *Eval) ValidatePacks(ctx context.Context,
+	// expected commit tips
+	expectedCommits []string,
+	// evaluated git repository
+	result *dagger.Directory,
+) error {
+	expectedResolver := make(map[string]bool, len(expectedCommits))
+	for _, commit := range expectedCommits {
+		expectedResolver[commit] = false
 	}
-	return result, nil
+
+	packs, err := result.Directory(packDir).
+		Filter(dagger.DirectoryFilterOpts{Include: []string{"*.pack"}}).
+		Entries(ctx)
+	if err != nil {
+		return fmt.Errorf("filtering packfiles: %w", err)
+	}
+
+	var errs []error
+	for _, pack := range packs {
+		out, err := ctrWithGit().
+			With(withGitConfig()).
+			WithDirectory(srcDir, result).
+			WithWorkdir(srcDir).
+			WithExec([]string{"git", "verify-pack", "-v", filepath.Join(packDir, pack)}).
+			Stdout(ctx)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("verifying packfile %s: %w", pack, err))
+			continue
+		}
+
+		// example out:
+		// 01a6dfffa2aec52e57f4961cf7de8bb01f6f2e0d blob   36 50 112
+		// 0e3c37a3474b43457d77674cf048c7e3be742bd3 tree   73 88 401
+		// b49cb06c3c94f5d791a3aa57525ba94c1d180193 commit 174 125 802
+		for _, line := range strings.Split(out, "\n") {
+			if strings.Contains(line, "commit") {
+				fields := strings.Fields(line)
+				if len(fields) != 5 {
+					return fmt.Errorf("unexpected verify-pack output line: %s", line)
+				}
+				commit := fields[0]
+				_, ok := expectedResolver[commit]
+				if ok {
+					expectedResolver[commit] = true
+				}
+			}
+		}
+	}
+
+	for commit, found := range expectedResolver {
+		if !found {
+			errs = append(errs, fmt.Errorf("missing expected commit %s", commit))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// splitRefPairs splits a set of 'commit SP ref'
+// pairs, returning the commits and references respectively.
+func splitRefPairs(commitRefs []string) ([]string, []string, error) {
+	commits := make([]string, 0, len(commitRefs))
+	refs := make([]string, 0, len(commitRefs))
+	for _, pair := range commitRefs {
+		commit, ref, err := splitRefPair(pair)
+		if err != nil {
+			return nil, nil, fmt.Errorf("removing commit from reference pair: %w", err)
+		}
+		commits = append(commits, commit)
+		refs = append(refs, ref)
+	}
+	return commits, refs, nil
 }
 
 // splitRefPair returns the commit and reference that make up
@@ -156,3 +220,17 @@ func subset[T any](full []T, size int) []T {
 	})
 	return clone[:size]
 }
+
+// git verify-pack .git/objects/pack/pack-b66b57cb487a7e255ffe8bf51d2121e754b03630.pack -v
+// eef5c05d9e550943cf0b68cef3596527259280e6 blob   36 50 12
+// 260377dc2980a649a9f6208d2ffb002ec6d53efb blob   36 50 62
+// 01a6dfffa2aec52e57f4961cf7de8bb01f6f2e0d blob   36 50 112
+// 5968665a871eb5413468e204c664594c7b069a5a tree   219 211 162
+// 81b6c0c5fe40666a7ae0673578f816ea3007703c tree   12 28 373 1 5968665a871eb5413468e204c664594c7b069a5a
+// 0e3c37a3474b43457d77674cf048c7e3be742bd3 tree   73 88 401
+// 1d424e20e318a5d34c086e5ef39b1c614b816de0 commit 222 156 489
+// 7d206d570b7e697e59594fb251b08d4d444624cc commit 222 157 645
+// b49cb06c3c94f5d791a3aa57525ba94c1d180193 commit 174 125 802
+// non delta: 8 objects
+// chain length = 1: 1 object
+// .git/objects/pack/pack-b66b57cb487a7e255ffe8bf51d2121e754b03630.pack: ok
