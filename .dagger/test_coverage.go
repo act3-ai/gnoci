@@ -25,16 +25,14 @@ const (
 )
 
 // CoverageDocs generates all code coverage documentation.
-func (t *Test) CoverageDocs(ctx context.Context,
-	src *dagger.Directory,
-) *dagger.Changeset {
-	newSrc := src
-	coverage := t.Coverage(src)
+func (t *Test) CoverageDocs(ctx context.Context) *dagger.Changeset {
+	newSrc := t.Src
+	coverage := t.Coverage(t.Src)
 
 	return newSrc.
 		WithFile(coverageTreemapFile, t.CoverageTreeMap(ctx, coverage)).
 		WithFile(coverageBadgeFile, t.CoverageBadge(ctx, newSrc, coverage)).
-		Changes(src)
+		Changes(t.Src)
 }
 
 // Coverage generates a code coverage file.
