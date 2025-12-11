@@ -29,3 +29,7 @@ Real demos recorded with [Charmbracelet VHS](https://github.com/charmbracelet/vh
 ## Push To Remote
 
 ![Push Demo](https://vhs.charm.sh/vhs-3H2hCmsl3IVZqPCo54HZOK.gif)
+
+## Pull From Remote with Git LFS
+
+![LFS Pull Demo](https://vhs.charm.sh/vhs-7lKCOkMYpP611jrxjVdydL.gif)

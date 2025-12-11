@@ -9,4 +9,4 @@ git config lfs.customtransfer.oci.args ""
 git config lfs.customtransfer.oci.batch true
 git config lfs.customtransfer.oci.concurrent false
 # git config lfs.url "oci://$remote"
-git config remote.registry.lfsurl "oci://$remote"
+git config remote.oci-registry.lfsurl "oci://$remote"
