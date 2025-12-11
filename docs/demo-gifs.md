@@ -1,13 +1,23 @@
 # Visual Demo of git-remote-oci
 
+Real demos recorded with [Charmbracelet VHS](https://github.com/charmbracelet/vhs).
+
 ## Cloning
 
-![Cloning from remote](https://vhs.charm.sh/vhs-3BelJAuDhxsUijNEtVkxPC.gif)
+![Clone Demo](https://vhs.charm.sh/vhs-5MeZaF9WwrhjZWbb0WBqHr.gif)
 
 ## List Remote References
 
-![List remote](https://vhs.charm.sh/vhs-4G8bfW0hcyfLHDzD3wzCyw.gif)
+![List Remote Demo](https://vhs.charm.sh/vhs-6c5mc6SNDKj5HMzRwqeCrq.gif)
+
+### List Subsets of Remote References
+
+![List Remote Tags Branches Demo](https://vhs.charm.sh/vhs-5tc07I6EdvBrrPWbLt4qjL.gif)
 
 ## Fetch From Remote
 
-![Fetch](https://vhs.charm.sh/vhs-41m8LgTfCtdxuzvs0Dl8vc.gif)
+![Fetch Demo](https://vhs.charm.sh/vhs-KMfBJN0tamzMsXlNXVb5N.gif)
+
+## Pull From Remote
+
+![Pull Demo](https://vhs.charm.sh/vhs-y8LDgGFUJGM4SHyYxah0W.gif)

@@ -25,7 +25,7 @@ Sleep 500ms
 Enter
 Sleep 500ms
 
-Type "git fetch oci://127.0.0.1:5000/demos:gnoci main"
+Type "git fetch oci://127.0.0.1:5000/demo/source:gnoci main"
 Sleep 500ms
 Enter
 Sleep 2s
