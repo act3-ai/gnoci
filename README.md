@@ -22,7 +22,7 @@ Refer to the [Git OCI Artifact Specification](docs/spec/oci-spec.md).
 
 ## Git Remote Helper for OCI Registries
 
-`git-remote-oci` is a Git [remote helper](https://git-scm.com/docs/gitremote-helpers) that implements a custom protocol for interacting with Git repositories stored in OCI compliant registries. It is designed to allow users to interact with `git` as they normally do in their day-to-day workflows, but use an OCI registry as remote storage.
+`git-remote-oci` is a Git [remote helper](https://git-scm.com/docs/gitremote-helpers) that implements a custom protocol for interacting with Git repositories stored in OCI compliant registries. It is designed to allow users to interact with `git` as they normally do in their day-to-day workflows, but use an OCI registry as remote storage. It does not require `git-lfs-remote-oci`.
 
 `git-remote-oci` supports:
 
@@ -32,7 +32,7 @@ Refer to the [Git OCI Artifact Specification](docs/spec/oci-spec.md).
 - Evaluating remote references
 - Any native Git actions involving a remote
 
-`git-remote-oci` does not require `git-lfs-remote-oci`.
+![Clone Demo](https://vhs.charm.sh/vhs-5MeZaF9WwrhjZWbb0WBqHr.gif)
 
 ## Git LFS Remote Helper for OCI Registries
 

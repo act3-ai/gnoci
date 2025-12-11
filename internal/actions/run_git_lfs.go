@@ -115,8 +115,10 @@ func (action *GitLFS) Run(ctx context.Context) error {
 
 	cleanup, err := action.init(ctx, initReq)
 	defer func() {
-		if err := cleanup(); err != nil {
-			slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
+		if cleanup != nil {
+			if err := cleanup(); err != nil {
+				slog.ErrorContext(ctx, "cleaning up temporary files", slog.String("error", err.Error()))
+			}
 		}
 	}()
 	if err != nil {
