@@ -14,6 +14,10 @@ Real demos recorded with [Charmbracelet VHS](https://github.com/charmbracelet/vh
 
 ![List Remote Tags Branches Demo](https://vhs.charm.sh/vhs-5tc07I6EdvBrrPWbLt4qjL.gif)
 
+## Add Remote Shortname
+
+![Remote Add](https://vhs.charm.sh/vhs-1uaDEG1cxaqBS9epczcDgF.gif)
+
 ## Fetch From Remote
 
 ![Fetch Demo](https://vhs.charm.sh/vhs-KMfBJN0tamzMsXlNXVb5N.gif)
@@ -21,3 +25,7 @@ Real demos recorded with [Charmbracelet VHS](https://github.com/charmbracelet/vh
 ## Pull From Remote
 
 ![Pull Demo](https://vhs.charm.sh/vhs-y8LDgGFUJGM4SHyYxah0W.gif)
+
+## Push To Remote
+
+![Push Demo](https://vhs.charm.sh/vhs-3H2hCmsl3IVZqPCo54HZOK.gif)
