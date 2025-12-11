@@ -153,7 +153,6 @@ func (action *Git) localRepo(ctx context.Context) (git.Repository, error) {
 			return nil, fmt.Errorf("opening local repository: %w", err)
 		}
 		action.local = git.NewRepository(r)
-
 	}
 
 	return action.local, nil
