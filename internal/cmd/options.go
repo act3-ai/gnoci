@@ -28,6 +28,7 @@ func HandleOption(ctx context.Context, comm comms.Communicator) error {
 			return fmt.Errorf("writing option response: %w", err)
 		}
 	case err != nil:
+		// unreachable, for now
 		log.ErrorContext(ctx, "failed to handle option command")
 		return fmt.Errorf("handling option: %w", err)
 	default:
@@ -58,6 +59,7 @@ func verbosity(value string) error {
 		return fmt.Errorf("converting verbosity value to int: %w", err)
 	}
 
+	// TODO: We should tune these
 	var lvl slog.Level
 	switch {
 	case val <= 0:
