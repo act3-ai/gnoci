@@ -5,6 +5,7 @@
 ![Coverage](docs/figures/badges/coverage/coverage.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/act3-ai/gnoci)](https://goreportcard.com/report/github.com/act3-ai/gnoci)
 ![License](https://img.shields.io/github/license/act3-ai/gnoci)
+![Dagger](docs/figures/badges/dagger.svg)
 
 Pronounced as gnocchi.
 
