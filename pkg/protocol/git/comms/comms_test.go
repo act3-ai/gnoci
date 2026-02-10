@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/act3-ai/gnoci/internal/testutils"
 	"github.com/act3-ai/gnoci/pkg/protocol/git"
+	"github.com/act3-ai/gnoci/pkg/testutils"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/stretchr/testify/assert"
 )

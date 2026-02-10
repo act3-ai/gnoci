@@ -7,7 +7,7 @@ import (
 	"github.com/act3-ai/gnoci/internal/mocks/gitmock"
 	"github.com/act3-ai/gnoci/internal/mocks/modelmock"
 	"github.com/act3-ai/gnoci/internal/model"
-	"github.com/act3-ai/gnoci/internal/testutils"
+	"github.com/act3-ai/gnoci/pkg/testutils"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/opencontainers/go-digest"
